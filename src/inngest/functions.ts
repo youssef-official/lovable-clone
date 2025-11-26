@@ -36,7 +36,9 @@ export const codeAgentFunction = inngest.createFunction(
       description: "An expert coding agent",
       system: PROMPT,
       model: openai({
-        model: "gpt-4.1",
+        model: "minimax/minimax-pro-m2",
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseURL: "https://openrouter.ai/api/v1",
         defaultParameters: {
           temperature: 0.1, // Randomness (higher = more random)
         },
