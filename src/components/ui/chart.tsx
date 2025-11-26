@@ -259,12 +259,21 @@ function ChartTooltipContent({
 
 const ChartLegend = RechartsPrimitive.Legend
 
-function ChartLegendContent(props: React.ComponentProps<"div"> &
-  Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
-    hideIcon?: boolean
-    nameKey?: string
-  }) {
-  const { className, hideIcon = false, payload, verticalAlign = "bottom", nameKey } = props
+interface ChartLegendContentProps extends React.ComponentProps<"div"> {
+  hideIcon?: boolean
+  nameKey?: string
+  payload?: RechartsPrimitive.LegendProps["payload"]
+  verticalAlign?: RechartsPrimitive.LegendProps["verticalAlign"]
+}
+
+function ChartLegendContent({
+  className,
+  hideIcon = false,
+  payload,
+  verticalAlign = "bottom",
+  nameKey,
+  ...props
+}: ChartLegendContentProps) {
   const { config } = useChart()
 
   if (!payload?.length) {
