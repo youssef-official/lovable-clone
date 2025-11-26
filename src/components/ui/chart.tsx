@@ -121,7 +121,7 @@ function ChartTooltipContent({
 
 }: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
   React.ComponentProps<"div"> & {
-    payload?: { name: string; value: number; dataKey?: string; payload?: any }[]
+    payload?: { name: string; value: number; dataKey?: string; payload?: any; color?: string; fill?: string }[]
   } & {
     label?: string | number
     labelFormatter?: (value: string | number, name: string, props: any) => React.ReactNode
