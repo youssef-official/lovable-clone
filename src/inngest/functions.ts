@@ -23,7 +23,9 @@ export const codeAgentFunction = inngest.createFunction(
   { event: "code-agent/run" },
   async ({ event, step }) => {
     const sandboxId = await step.run("get-sandbox-id", async () => {
-      const sandbox = await Sandbox.create("vibe-nextjs-test-4");
+      // Using 'base' template which is available to all E2B users by default
+      // If you have a custom template, replace 'base' with your template name
+      const sandbox = await Sandbox.create("base");
       return sandbox.sandboxId;
     });
 
