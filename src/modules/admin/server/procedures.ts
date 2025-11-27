@@ -51,8 +51,8 @@ export const adminRouter = createTRPCRouter({
           emailAddress: [query],
         });
 
-        if (users.length > 0) {
-          const user = users[0];
+        if (users.data.length > 0) {
+          const user = users.data[0];
           return {
             id: user.id,
             email: user.emailAddresses[0]?.emailAddress || "N/A",
