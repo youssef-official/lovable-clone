@@ -55,19 +55,28 @@ export const projectsRouter = createTRPCRouter({
             code: "UNAUTHORIZED",
             message: "You must be logged in to create a project.",
           });
-        } else if (error instanceof Error) {
-          // This is likely the error thrown by consumeCredits if the user is out of credits
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: "You have run out of credits",
-          });
-        } else {
-          // Catch all other errors
+        }
+
+        // rate-limiter-flexible throws a "RateLimiterRes" object (which is not an Error) when rejected.
+        // But if it throws a real Error (like DB error), we should know.
+        // However, checking "instanceof Error" catches DB errors too.
+
+        // We assume that if it is NOT an Error instance, it is a RateLimiterRes, so we are out of credits.
+        // If it IS an Error instance, it's likely a DB error or something else.
+
+        if (error instanceof Error) {
+          console.error("Credit consumption error:", error);
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "An unknown error occurred during credit consumption.",
+            message: `Credit consumption failed: ${error.message}`,
           });
         }
+
+        // If it's not an error object, it's the rejection from rate-limiter (out of credits)
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "You have run out of credits",
+        });
       }
 
       const createdProject = await prisma.project.create({

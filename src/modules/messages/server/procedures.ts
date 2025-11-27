@@ -57,18 +57,25 @@ export const messagesRouter = createTRPCRouter({
       try {
         await consumeCredits();
       } catch (error) {
-        console.error("Credit consumption failed:", error); // Log the actual error
-        if (error instanceof Error) {
+        if (error instanceof Error && error.message === "User not authenticated") {
           throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: error.message, // Return the actual error message
-          });
-        } else {
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: "You have run out of credits",
+            code: "UNAUTHORIZED",
+            message: "You must be logged in.",
           });
         }
+
+        if (error instanceof Error) {
+           console.error("Credit consumption error:", error);
+           throw new TRPCError({
+             code: "INTERNAL_SERVER_ERROR",
+             message: `Credit consumption failed: ${error.message}`,
+           });
+        }
+
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "You have run out of credits",
+        });
       }
 
       const createdMessage = await prisma.message.create({
