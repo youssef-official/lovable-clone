@@ -36,7 +36,7 @@ export const adminRouter = createTRPCRouter({
       try {
         // 1. Try to find by User ID
         if (query.startsWith("user_")) {
-          const user = await clerkClient.users.getUser(query);
+          const user = await (await clerkClient()).users.getUser(query);
           return {
             id: user.id,
             email: user.emailAddresses[0]?.emailAddress || "N/A",
@@ -46,7 +46,7 @@ export const adminRouter = createTRPCRouter({
         }
 
         // 2. Try to find by Email Address
-        const users = await clerkClient.users.getUserList({
+        const users = await (await clerkClient()).users.getUserList({
           emailAddress: [query],
         });
 
