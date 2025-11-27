@@ -3,8 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 import { AUTHORIZED_ADMIN_USER_ID } from "@/lib/constants";
 import { redirect } from "next/navigation";
 
-export default function AdminPage() {
-  const { userId } = auth();
+export default async function AdminPage() {
+  const { userId } = await auth();
 
   if (userId !== AUTHORIZED_ADMIN_USER_ID) {
     // Redirect to home page if not the authorized admin
