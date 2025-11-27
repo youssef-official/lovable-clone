@@ -39,7 +39,9 @@ export const AdminView = () => {
   });
 
   // Use useQuery for findUser, but disable it initially and use refetch for manual trigger
-  const findUserQuery = trpc.admin.findUser.useQuery(findUserQueryInput!, {
+  const findUserQuery = trpc.admin.findUser.useQuery(
+    findUserQueryInput,
+    {
     enabled: !!findUserQueryInput, // Only run when input is set
     onSuccess: (data) => {
       setUserInfo(data);
