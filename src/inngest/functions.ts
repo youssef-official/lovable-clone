@@ -25,7 +25,9 @@ export const codeAgentFunction = inngest.createFunction(
     const sandboxId = await step.run("get-sandbox-id", async () => {
       // Using 'base' template which is available to all E2B users by default
       // If you have a custom template, replace 'base' with your template name
-      const sandbox = await Sandbox.create("base");
+      const sandbox = await Sandbox.create("base", {
+        timeoutMs: 3600_000,
+      });
       return sandbox.sandboxId;
     });
 
