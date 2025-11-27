@@ -1,5 +1,6 @@
 import { ProjectForm } from "@/modules/home/ui/components/project-form";
 import { ProjectsList } from "@/modules/home/ui/components/projects-list";
+import { CreditCardSection } from "@/modules/home/ui/components/credit-card-section";
 import Image from "next/image";
 
 export default function Page() {
@@ -26,6 +27,9 @@ export default function Page() {
         </div>
       </section>
       <ProjectsList />
+      <div className="py-8">
+        <CreditCardSection />
+      </div>
     </div>
   );
 }
