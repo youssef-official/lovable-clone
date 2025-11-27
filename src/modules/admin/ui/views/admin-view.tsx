@@ -37,14 +37,9 @@ export const AdminView = () => {
     },
   });
 
-  const setCreditsForm = useForm<z.infer<typeof setCreditsSchema>>({
-    resolver: zodResolver(setCreditsSchema),
-    defaultValues: {
-      points: 0,
-    },
-  });
-
-  const findUserMutation = trpc.admin.findUser.useMutation({
+  // Use useQuery for findUser, but disable it initially and use refetch for manual trigger
+  const findUserQuery = trpc.admin.findUser.useQuery(findUserForm.getValues(), {
+    enabled: false, // Only run on manual submit
     onSuccess: (data) => {
       setUserInfo(data);
       toast.success("User found.");
@@ -66,7 +61,8 @@ export const AdminView = () => {
   });
 
   const onFindUserSubmit = (values: z.infer<typeof findUserSchema>) => {
-    findUserMutation.mutate(values);
+    // Manually trigger the query with the current form values
+    findUserQuery.refetch();
   };
 
   const onSetCreditsSubmit = (values: z.infer<typeof setCreditsSchema>) => {
@@ -105,8 +101,8 @@ export const AdminView = () => {
                   </FormItem>
                 )}
               />
-              <Button type="submit" disabled={findUserMutation.isPending}>
-                {findUserMutation.isPending ? "Searching..." : "Find User"}
+              <Button type="submit" disabled={findUserQuery.isFetching}>
+                {findUserQuery.isFetching ? "Searching..." : "Find User"}
               </Button>
             </form>
           </Form>
