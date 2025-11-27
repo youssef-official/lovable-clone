@@ -4,11 +4,11 @@ import { z } from "zod";
 import { addCredits } from "@/lib/usage";
 import { prisma } from "@/lib/db";
 import { clerkClient } from "@clerk/nextjs/server";
-import { AUTHORIZED_ADMIN_USER_ID } from "@/lib/constants";
+
 
 // Middleware to check if the user is the authorized admin
 const isAdmin = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.auth.userId !== AUTHORIZED_ADMIN_USER_ID) {
+  if (ctx.auth.user?.emailAddresses[0]?.emailAddress !== "youssef.official.2411@gmail.com") {
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: "You are not authorized to access this admin panel.",
