@@ -29,6 +29,7 @@ interface UserInfo {
 export const AdminView = () => {
   const trpc = useTRPC();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [findUserQueryInput, setFindUserQueryInput] = useState<z.infer<typeof findUserSchema> | null>(null);
 
   const findUserForm = useForm<z.infer<typeof findUserSchema>>({
     resolver: zodResolver(findUserSchema),
@@ -38,8 +39,8 @@ export const AdminView = () => {
   });
 
   // Use useQuery for findUser, but disable it initially and use refetch for manual trigger
-  const findUserQuery = trpc.admin.findUser.useQuery(findUserForm.getValues(), {
-    enabled: false, // Only run on manual submit
+  const findUserQuery = trpc.admin.findUser.useQuery(findUserQueryInput!, {
+    enabled: !!findUserQueryInput, // Only run when input is set
     onSuccess: (data) => {
       setUserInfo(data);
       toast.success("User found.");
@@ -61,8 +62,8 @@ export const AdminView = () => {
   });
 
   const onFindUserSubmit = (values: z.infer<typeof findUserSchema>) => {
-    // Manually trigger the query with the current form values
-    findUserQuery.refetch();
+    // Set the state to trigger the query
+    setFindUserQueryInput(values);
   };
 
   const onSetCreditsSubmit = (values: z.infer<typeof setCreditsSchema>) => {
@@ -101,7 +102,7 @@ export const AdminView = () => {
                   </FormItem>
                 )}
               />
-              <Button type="submit" disabled={findUserQuery.isFetching}>
+              <Button type="submit" disabled={findUserQuery.isFetching || !findUserQueryInput}>
                 {findUserQuery.isFetching ? "Searching..." : "Find User"}
               </Button>
             </form>
