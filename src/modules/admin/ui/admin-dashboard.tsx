@@ -15,6 +15,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -103,6 +104,9 @@ export const AdminDashboard = () => {
             <DialogContent>
                 <DialogHeader>
                 <DialogTitle>Manage User Credits</DialogTitle>
+                <DialogDescription>
+                    Add a new user record or update existing credits.
+                </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -176,6 +180,9 @@ export const AdminDashboard = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Update Credits for {selectedUser}</DialogTitle>
+            <DialogDescription>
+                Modify the credit balance for this user.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
