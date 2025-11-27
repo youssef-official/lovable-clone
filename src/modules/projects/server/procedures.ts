@@ -50,15 +50,22 @@ export const projectsRouter = createTRPCRouter({
       try {
         await consumeCredits();
       } catch (error) {
-        if (error instanceof Error) {
+        if (error instanceof Error && error.message === "User not authenticated") {
           throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Something went wrong",
+            code: "UNAUTHORIZED",
+            message: "You must be logged in to create a project.",
           });
-        } else {
+        } else if (error instanceof Error) {
+          // This is likely the error thrown by consumeCredits if the user is out of credits
           throw new TRPCError({
             code: "TOO_MANY_REQUESTS",
             message: "You have run out of credits",
+          });
+        } else {
+          // Catch all other errors
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "An unknown error occurred during credit consumption.",
           });
         }
       }
