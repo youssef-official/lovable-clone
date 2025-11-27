@@ -8,7 +8,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 
 // Middleware to check if the user is the authorized admin
 const isAdmin = protectedProcedure.use(async ({ ctx, next }) => {
-  const user = await clerkClient.users.getUser(ctx.auth.userId);
+  const user = await (await clerkClient()).users.getUser(ctx.auth.userId);
   if (user.emailAddresses[0]?.emailAddress !== "youssef.official.2411@gmail.com") {
     throw new TRPCError({
       code: "UNAUTHORIZED",
