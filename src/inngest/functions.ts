@@ -177,6 +177,26 @@ export const codeAgentFunction = inngest.createFunction(
 
     const result = await network.run(event.data.value);
 
+    // Fallback: Ensure server is running if the agent didn't start it
+    // The "base" sandbox might not have a running process.
+    // We check if port 3000 is open, if not, we try to start 'npm run dev'
+    // This is a safety net.
+    await step.run("ensure-server-running", async () => {
+        try {
+            const sandbox = await getSandbox(sandboxId);
+            // We can't easily check port status via SDK directly without making a request.
+            // But we can blindly run the start command in background if package.json exists.
+            const exists = await sandbox.files.exists("package.json");
+            if (exists) {
+                console.log("Ensuring server is running...");
+                // Run in background
+                await sandbox.commands.run("npm run dev > /dev/null 2>&1 &");
+            }
+        } catch (e) {
+            console.warn("Failed to ensure server running:", e);
+        }
+    });
+
     let isError =
       !result.state.data.summary ||
       Object.keys(result.state.data.files || {}).length === 0;

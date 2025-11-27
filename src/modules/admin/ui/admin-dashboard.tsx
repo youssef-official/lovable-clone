@@ -15,6 +15,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -22,6 +23,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RefreshCcw } from "lucide-react";
+import { toast } from "sonner";
 
 interface UsageRecord {
   key: string;
@@ -67,10 +69,11 @@ export const AdminDashboard = () => {
       await updateUserCredits(selectedUser, amount, actionType);
       setDialogOpen(false);
       setAmount(0);
+      toast.success("Credits updated successfully");
       fetchUsers();
     } catch (error) {
       console.error("Failed to update credits", error);
-      alert("Failed to update credits");
+      toast.error("Failed to update credits");
     }
   };
 
@@ -81,9 +84,11 @@ export const AdminDashboard = () => {
       setNewUserDialogOpen(false);
       setNewUserId("");
       setAmount(0);
+      toast.success("User credits set successfully");
       fetchUsers();
     } catch (error) {
       console.error("Failed to create/update user", error);
+      toast.error("Failed to create/update user");
     }
   };
 
@@ -103,6 +108,9 @@ export const AdminDashboard = () => {
             <DialogContent>
                 <DialogHeader>
                 <DialogTitle>Manage User Credits</DialogTitle>
+                <DialogDescription>
+                    Add a new user record or update existing credits.
+                </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -176,6 +184,9 @@ export const AdminDashboard = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Update Credits for {selectedUser}</DialogTitle>
+            <DialogDescription>
+                Modify the credit balance for this user.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">

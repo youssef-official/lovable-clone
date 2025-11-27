@@ -24,11 +24,12 @@ export const UserCredits = ({ className }: UserCreditsProps) => {
     return null;
   }
 
+  const isPro = credits.points > 5; // Simple heuristic based on default limits (5 vs 100)
+
   return (
     <div className={cn("flex items-center gap-2 text-sm font-medium", className)}>
-      <span className="text-muted-foreground">Credits:</span>
       <span className={cn(credits.remainingPoints === 0 && "text-red-500")}>
-        {credits.remainingPoints} / {credits.points}
+        {credits.remainingPoints} {isPro ? "Credits" : "Free Credits"}
       </span>
     </div>
   );
