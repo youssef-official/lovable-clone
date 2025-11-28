@@ -242,7 +242,7 @@ export const ProjectView = ({ projectId }: Props) => {
                                         <Input
                                             placeholder="my-awesome-app"
                                             value={subdomain}
-                                            onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "))}
+                                            onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                                         />
                                         <span className="text-muted-foreground text-sm">.pages.dev</span>
                                     </div>
