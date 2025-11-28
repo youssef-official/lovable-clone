@@ -94,7 +94,7 @@ export const ProjectView = ({ projectId }: Props) => {
 
   return (
     <div className="h-screen flex flex-col md:flex-row relative">
-      <ResizablePanelGroup direction="horizontal" className="hidden md:flex flex-1 w-0 md:w-auto">
+      <ResizablePanelGroup direction="horizontal" className="hidden md:flex flex-1">
         <ResizablePanel
           defaultSize={35}
           minSize={20}
@@ -113,6 +113,7 @@ export const ProjectView = ({ projectId }: Props) => {
         </ResizablePanel>
         <ResizableHandle className="hover:bg-primary transition-colors" />
         <ResizablePanel defaultSize={65} minSize={50}>
+          <div className="hidden md:block h-full">
           <Tabs
             className="h-full gap-y-0"
             defaultValue="preview"
@@ -196,6 +197,7 @@ export const ProjectView = ({ projectId }: Props) => {
               )}
             </TabsContent>
           </Tabs>
+        </div>
         </ResizablePanel>
       </ResizablePanelGroup>
 
