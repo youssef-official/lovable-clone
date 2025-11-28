@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useTRPC } from "@/trpc/client";
+import { api } from "@/trpc/client";
 
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
@@ -41,7 +41,7 @@ export const ProjectView = ({ projectId }: Props) => {
   const { has } = useAuth();
   const hasProAccess = has?.({ permission: "pro" });
 
-  const trpc = useTRPC();
+  const trpc = api;
   const [subdomain, setSubdomain] = useState("");
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
 
