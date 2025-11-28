@@ -88,7 +88,7 @@ export const ProjectView = ({ projectId }: Props) => {
   };
   const [tabState, setTabState] = useState<"preview" | "code">("preview");
 
-  const { data: projectData, isLoading: isProjectLoading } = trpc.projects.getOne.useQuery({ id: projectId });
+  const { data: projectData, isLoading: isProjectLoading } = trpc.projects.getOne.useQuery({ id: projectId }); // Fixed tRPC call
 
   const [mobileTab, setMobileTab] = useState<"chat" | "preview">("preview"); // Set default to preview as per Lovable style
 
