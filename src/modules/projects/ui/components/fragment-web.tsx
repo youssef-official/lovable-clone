@@ -26,37 +26,6 @@ export function FragmentWeb({ data }: Props) {
 
   return (
     <div className="flex flex-col w-full h-full relative">
-      <div className="p-2 border-b bg-sidebar flex items-center gap-x-2">
-        <Hint text="Refresh" side="bottom">
-          <Button size="sm" variant={"outline"} onClick={onRefresh}>
-            <RefreshCcwIcon />
-          </Button>
-        </Hint>
-        <Hint text="Click to copy" side="bottom">
-          <Button
-            size="sm"
-            variant={"outline"}
-            onClick={handleCopy}
-            disabled={!data.sandboxUrl || copied}
-            className="flex-1 justify-start text-start font-normal"
-          >
-            <span className="truncate">{data.sandboxUrl}</span>
-          </Button>
-        </Hint>
-        <Hint text="Open in a new tab" side="bottom" align="start">
-          <Button
-            size="sm"
-            disabled={!data.sandboxUrl}
-            variant={"outline"}
-            onClick={() => {
-              if (!data.sandboxUrl) return;
-              window.open(data.sandboxUrl, "_blank");
-            }}
-          >
-            <ExternalLinkIcon />
-          </Button>
-        </Hint>
-      </div>
       <div className="relative flex-1 w-full h-full bg-background">
          {loading && (
              <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-10 text-muted-foreground gap-2">

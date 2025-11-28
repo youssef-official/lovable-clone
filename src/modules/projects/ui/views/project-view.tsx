@@ -6,6 +6,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { MessagesContainer } from "../components/messages-container";
+import { ArrowLeftIcon, ChevronDownIcon, SettingsIcon, UploadIcon, Loader2Icon } from "lucide-react";
 import { Suspense, useState } from "react";
 import { Fragment } from "@/generated/prisma";
 import { ProjectHeader } from "../components/project-header";
@@ -28,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTRPC } from "@/trpc/client";
+import { trpc } from "@/trpc/client";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
 
@@ -86,7 +88,7 @@ export const ProjectView = ({ projectId }: Props) => {
   };
   const [tabState, setTabState] = useState<"preview" | "code">("preview");
 
-  const [mobileTab, setMobileTab] = useState<"chat" | "preview">("chat");
+  const [mobileTab, setMobileTab] = useState<"chat" | "preview">("preview"); // Set default to preview as per Lovable style
 
   // Mobile layout check or CSS-based toggling
   // Since we are server-rendering initially, we can't rely on window.width easily without hydration mismatch.
@@ -101,7 +103,7 @@ export const ProjectView = ({ projectId }: Props) => {
           className="flex flex-col min-h-0"
         >
           <Suspense fallback={<p>Loading project...</p>}>
-            <ProjectHeader projectId={projectId} />
+
           </Suspense>
           <Suspense fallback={<p>Loading...</p>}>
             <MessagesContainer
@@ -201,8 +203,103 @@ export const ProjectView = ({ projectId }: Props) => {
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      {/* Mobile View Implementation */}
-      <div className="md:hidden flex-1 flex flex-col min-h-0 pb-[70px]">
+	      {/* Mobile View Implementation - New Lovable Style */}
+      <div className="md:hidden flex-1 flex flex-col min-h-0 relative bg-[#111111] text-white">
+        {/* 1. Top Navigation Bar (Glassy, Blurred, Transparent) */}
+        <div className="fixed top-0 left-0 right-0 z-40 p-4 backdrop-blur-lg bg-black/30 border-b border-white/10">
+          <div className="flex items-center justify-between max-w-sm mx-auto">
+            <Button variant="ghost" size="icon" className="text-white/80 hover:text-white">
+              <ArrowLeftIcon className="size-5" />
+            </Button>
+            <div className="flex items-center gap-1">
+	              <span className="text-lg font-semibold truncate max-w-[150px]">
+	                {/* Use project name from trpc query */}
+	                {trpc.projects.getOne.useSuspenseQuery({ id: projectId }).data.name}
+	              </span>
+              <ChevronDownIcon className="size-4 text-white/60" />
+            </div>
+            <Button variant="ghost" size="icon" className="text-white/80 hover:text-white">
+              <SettingsIcon className="size-5" />
+            </Button>
+          </div>
+        </div>
+
+        {/* 2. Main Content Area - Adjust padding for fixed header/footer */}
+        <div className="flex-1 overflow-y-auto pt-[72px] pb-[100px] flex justify-center items-center">
+          {mobileTab === "chat" ? (
+            <div className="flex flex-col h-full w-full">
+              {/* Chat Content - Keep MessagesContainer, remove ProjectHeader */}
+              <MessagesContainer
+                projectId={projectId}
+                activeFragment={activeFragment}
+                setActiveFragment={setActiveFragment}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col h-full w-full p-4">
+              {/* Preview Content - Mobile Frame */}
+              <div className="relative w-full max-w-xs aspect-[9/16] mx-auto bg-black rounded-[3rem] shadow-[0_0_0_10px_#222,0_0_0_12px_#333,0_0_0_15px_#444] overflow-hidden">
+                {/* Placeholder for Speaker/Camera Notch */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/3 h-6 bg-black rounded-b-xl z-10"></div>
+                
+                {/* Loading State */}
+                {restoreMutation.isPending ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black">
+                    <Loader2Icon className="size-8 animate-spin text-white/80" />
+                  </div>
+                ) : (
+                  <div className="w-full h-full p-2">
+                    {/* Iframe/FragmentWeb - Needs to be styled as an iframe with rounded corners */}
+                    <div className="w-full h-full bg-white rounded-2xl overflow-hidden border border-gray-700">
+                      {activeFragment ? (
+                        <FragmentWeb data={activeFragment} />
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-gray-500">
+                          No active preview.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Bottom Floating Bar (Rounded Pill) */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 p-4">
+          <div className="flex items-center justify-center">
+            <div className="relative bg-black/50 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl p-1.5 flex items-center gap-1 w-fit">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`rounded-full px-6 transition-all duration-300 font-medium ${mobileTab === "chat" ? "bg-white/10 text-white" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+                onClick={() => setMobileTab("chat")}
+              >
+                Chat
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`rounded-full px-6 transition-all duration-300 font-medium ${mobileTab === "preview" ? "bg-white/10 text-white" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+                onClick={() => setMobileTab("preview")}
+              >
+                Preview
+              </Button>
+            </div>
+            {/* Floating Circular Action Button */}
+            <Button
+              variant="default"
+              size="icon"
+              className="absolute right-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full size-12 shadow-lg hover:bg-white/20 transition-colors"
+              onClick={() => setIsPublishDialogOpen(true)}
+            >
+              <UploadIcon className="size-5 text-white" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
           {mobileTab === "chat" ? (
              <div className="flex flex-col h-full">
                 <ProjectHeader projectId={projectId} />
@@ -267,27 +364,7 @@ export const ProjectView = ({ projectId }: Props) => {
           )}
       </div>
 
-      {/* Floating Bottom Navigation for Mobile - Styled like Lovable/Ymo */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 p-2">
-        <div className="bg-[#1C1C1E] dark:bg-[#1C1C1E] border border-white/10 rounded-full shadow-2xl p-1.5 flex items-center gap-1 w-fit mx-auto">
-          <Button
-            variant={"ghost"}
-            size="sm"
-            className={`rounded-full px-6 transition-all duration-300 ${mobileTab === "chat" ? "bg-[#2C2C2E] text-white" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
-            onClick={() => setMobileTab("chat")}
-          >
-            Chat
-          </Button>
-          <Button
-            variant={"ghost"}
-            size="sm"
-            className={`rounded-full px-6 transition-all duration-300 ${mobileTab === "preview" ? "bg-[#2C2C2E] text-white" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
-            onClick={() => setMobileTab("preview")}
-          >
-            Preview
-          </Button>
-        </div>
-      </div>
+
     </div>
   );
 };
