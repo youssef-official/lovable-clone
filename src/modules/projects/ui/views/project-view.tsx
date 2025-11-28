@@ -102,9 +102,9 @@ export const ProjectView = ({ projectId }: Props) => {
           minSize={20}
           className="flex flex-col min-h-0"
         >
-          <Suspense fallback={<p>Loading project...</p>}>
-
-          </Suspense>
+	          <Suspense fallback={<p>Loading project...</p>}>
+	            <ProjectHeader projectId={projectId} />
+	          </Suspense>
           <Suspense fallback={<p>Loading...</p>}>
             <MessagesContainer
               projectId={projectId}
