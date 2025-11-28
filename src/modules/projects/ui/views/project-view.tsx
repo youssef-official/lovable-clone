@@ -88,6 +88,8 @@ export const ProjectView = ({ projectId }: Props) => {
   };
   const [tabState, setTabState] = useState<"preview" | "code">("preview");
 
+  const { data: projectData, isLoading: isProjectLoading } = trpc.projects.getOne.useQuery({ id: projectId });
+
   const [mobileTab, setMobileTab] = useState<"chat" | "preview">("preview"); // Set default to preview as per Lovable style
 
   // Mobile layout check or CSS-based toggling
@@ -213,8 +215,8 @@ export const ProjectView = ({ projectId }: Props) => {
             </Button>
             <div className="flex items-center gap-1">
 	              <span className="text-lg font-semibold truncate max-w-[150px]">
-	                {/* Use project name from trpc query */}
-	                {trpc.projects.getOne.useSuspenseQuery({ id: projectId }).data.name}
+		                {/* Use project name from trpc query */}
+		                {isProjectLoading ? "Loading..." : projectData?.name || "Project"}
 	              </span>
               <ChevronDownIcon className="size-4 text-white/60" />
             </div>
