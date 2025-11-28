@@ -31,7 +31,7 @@ import { Label } from "@/components/ui/label";
 import { useTRPC } from "@/trpc/client";
 
 import { toast } from "sonner";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 interface Props {
@@ -86,7 +86,7 @@ export const ProjectView = ({ projectId }: Props) => {
   };
   const [tabState, setTabState] = useState<"preview" | "code">("preview");
 
-  const { data: projectData, isLoading: isProjectLoading } = trpc.projects.getOne.useQuery({ id: projectId });
+  const { data: projectData, isLoading: isProjectLoading } = useQuery(trpc.projects.getOne.queryOptions({ id: projectId }));
 
   const [mobileTab, setMobileTab] = useState<"chat" | "preview">("preview");
 
