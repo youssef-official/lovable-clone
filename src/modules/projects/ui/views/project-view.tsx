@@ -200,7 +200,7 @@ export const ProjectView = ({ projectId }: Props) => {
       </ResizablePanelGroup>
 
       {/* Mobile View Implementation */}
-      <div className="md:hidden flex-1 flex flex-col min-h-0 pb-14">
+      <div className="md:hidden flex-1 flex flex-col min-h-0 pb-[70px]">
           {mobileTab === "chat" ? (
              <div className="flex flex-col h-full">
                 <ProjectHeader projectId={projectId} />
@@ -211,87 +211,63 @@ export const ProjectView = ({ projectId }: Props) => {
                 />
              </div>
           ) : (
-            <Tabs
-            className="h-full gap-y-0 flex flex-col"
-            defaultValue="preview"
-            value={tabState}
-            onValueChange={(value) => setTabState(value as "preview" | "code")}
-          >
-            <div className="w-full flex items-center p-2 border-b gap-x-2 shrink-0">
-              <TabsList className="h-8 p-0 border rounded-md">
-                <TabsTrigger value="preview" className="rounded-md">
-                  <EyeIcon className="size-4" />
-                </TabsTrigger>
-                <TabsTrigger value="code" className="rounded-md">
-                  <CodeIcon className="size-4" />
-                </TabsTrigger>
-              </TabsList>
-              {tabState === "preview" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => restoreMutation.mutate({ projectId })}
-                    disabled={restoreMutation.isPending}
-                    title="Restart Preview Server"
-                   >
-                      <RefreshCwIcon className={restoreMutation.isPending ? "animate-spin" : ""} />
-                  </Button>
-              )}
-              <div className="ml-auto flex items-center gap-x-2">
-                 <Dialog open={isPublishDialogOpen} onOpenChange={setIsPublishDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button size="sm" className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-0 px-2">
-                            <RocketIcon className="size-4" />
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Publish to the Web</DialogTitle>
-                            <DialogDescription>
-                                Enter a unique subdomain to deploy your project instantly.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label>Subdomain</Label>
-                                <div className="flex items-center gap-2">
-                                    <Input
-                                        placeholder="my-awesome-app"
-                                        value={subdomain}
-                                        onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                                    />
-                                    <span className="text-muted-foreground text-sm">.pages.dev</span>
-                                </div>
-                            </div>
-                            <Button
-                                onClick={handlePublish}
-                                className="w-full"
-                                disabled={publishMutation.isPending || !subdomain}
-                            >
-                                {publishMutation.isPending ? "Publishing..." : "Deploy Now"}
+            <div className="flex flex-col h-full">
+                <div className="w-full flex items-center p-2 border-b gap-x-2 shrink-0 justify-end">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => restoreMutation.mutate({ projectId })}
+                        disabled={restoreMutation.isPending}
+                        title="Restart Preview Server"
+                    >
+                        <RefreshCwIcon className={restoreMutation.isPending ? "animate-spin" : ""} />
+                    </Button>
+                    <Dialog open={isPublishDialogOpen} onOpenChange={setIsPublishDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button size="sm" className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-0 px-2">
+                                <RocketIcon className="size-4" />
                             </Button>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-              </div>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Publish to the Web</DialogTitle>
+                                <DialogDescription>
+                                    Enter a unique subdomain to deploy your project instantly.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label>Subdomain</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            placeholder="my-awesome-app"
+                                            value={subdomain}
+                                            onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "))}
+                                        />
+                                        <span className="text-muted-foreground text-sm">.pages.dev</span>
+                                    </div>
+                                </div>
+                                <Button
+                                    onClick={handlePublish}
+                                    className="w-full"
+                                    disabled={publishMutation.isPending || !subdomain}
+                                >
+                                    {publishMutation.isPending ? "Publishing..." : "Deploy Now"}
+                                </Button>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+                <div className="flex-1 min-h-0">
+                    {activeFragment && <FragmentWeb data={activeFragment} />}
+                </div>
             </div>
-            <TabsContent value="preview" className="flex-1 min-h-0">
-              {activeFragment && <FragmentWeb data={activeFragment} />}
-            </TabsContent>
-            <TabsContent value="code" className="flex-1 min-h-0">
-              {!!activeFragment?.files && (
-                <FileExplorer
-                  files={activeFragment.files as { [path: string]: string }}
-                />
-              )}
-            </TabsContent>
-          </Tabs>
           )}
       </div>
 
       {/* Floating Bottom Navigation for Mobile - Styled like Lovable/Ymo */}
-      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <div className="bg-[#1C1C1E] dark:bg-[#1C1C1E] border border-white/10 rounded-full shadow-2xl p-1.5 flex items-center gap-1">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 p-2">
+        <div className="bg-[#1C1C1E] dark:bg-[#1C1C1E] border border-white/10 rounded-full shadow-2xl p-1.5 flex items-center gap-1 w-fit mx-auto">
           <Button
             variant={"ghost"}
             size="sm"
