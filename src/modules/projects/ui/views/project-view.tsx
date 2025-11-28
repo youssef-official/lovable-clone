@@ -300,69 +300,7 @@ export const ProjectView = ({ projectId }: Props) => {
         </div>
       </div>
 
-          {mobileTab === "chat" ? (
-             <div className="flex flex-col h-full">
-                <ProjectHeader projectId={projectId} />
-                <MessagesContainer
-                    projectId={projectId}
-                    activeFragment={activeFragment}
-                    setActiveFragment={setActiveFragment}
-                />
-             </div>
-          ) : (
-            <div className="flex flex-col h-full">
-                <div className="w-full flex items-center p-2 border-b gap-x-2 shrink-0 justify-end">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => restoreMutation.mutate({ projectId })}
-                        disabled={restoreMutation.isPending}
-                        title="Restart Preview Server"
-                    >
-                        <RefreshCwIcon className={restoreMutation.isPending ? "animate-spin" : ""} />
-                    </Button>
-                    <Dialog open={isPublishDialogOpen} onOpenChange={setIsPublishDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button size="sm" className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-0 px-2">
-                                <RocketIcon className="size-4" />
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Publish to the Web</DialogTitle>
-                                <DialogDescription>
-                                    Enter a unique subdomain to deploy your project instantly.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                    <Label>Subdomain</Label>
-                                    <div className="flex items-center gap-2">
-                                        <Input
-                                            placeholder="my-awesome-app"
-                                            value={subdomain}
-                                            onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                                        />
-                                        <span className="text-muted-foreground text-sm">.pages.dev</span>
-                                    </div>
-                                </div>
-                                <Button
-                                    onClick={handlePublish}
-                                    className="w-full"
-                                    disabled={publishMutation.isPending || !subdomain}
-                                >
-                                    {publishMutation.isPending ? "Publishing..." : "Deploy Now"}
-                                </Button>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-                </div>
-                <div className="flex-1 min-h-0">
-                    {activeFragment && <FragmentWeb data={activeFragment} />}
-                </div>
-            </div>
-          )}
-      </div>
+
 
 
     </div>
