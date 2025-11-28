@@ -93,8 +93,8 @@ export const ProjectView = ({ projectId }: Props) => {
   // But we can use CSS classes. Tailwind 'md:flex' etc.
 
   return (
-    <div className="h-screen flex flex-col md:flex-row relative overflow-hidden">
-      <ResizablePanelGroup direction="horizontal" className="hidden md:flex flex-1">
+    <div className="h-screen flex flex-col md:flex-row relative">
+      <ResizablePanelGroup direction="horizontal" className="hidden md:flex flex-1 w-0 md:w-auto">
         <ResizablePanel
           defaultSize={35}
           minSize={20}
