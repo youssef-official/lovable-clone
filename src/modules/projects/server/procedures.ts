@@ -70,7 +70,7 @@ export const projectsRouter = createTRPCRouter({
 
         // Use --no-audit --no-fund to speed up install.
         const startCommand = "npm install --no-audit --no-fund --quiet && npm run dev > /home/user/server.log 2>&1 &";
-        await sandbox.commands.run(startCommand);
+        await sandbox.commands.run(startCommand, { timeoutMs: 0 });
 
         // Update DB with new URL
         await prisma.fragment.update({

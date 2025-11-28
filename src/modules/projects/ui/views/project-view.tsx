@@ -241,30 +241,32 @@ export const ProjectView = ({ projectId }: Props) => {
               />
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center p-6 h-full">
-              {/* Preview Content - Mobile Frame */}
-              <div className="relative w-full max-w-[320px] aspect-[9/18] bg-black rounded-[3rem] shadow-[0_0_0_8px_#1a1a1a,0_0_0_10px_#262626] overflow-hidden border border-white/10 ring-1 ring-white/5">
-                
-                {/* Dynamic Island / Notch */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 h-6 w-24 bg-black rounded-b-xl z-20 flex justify-center items-center">
-                    <div className="w-12 h-1 bg-[#1a1a1a] rounded-full mt-2"></div>
-                </div>
-
-                {/* Loading State or Content */}
-                {(!activeFragment || restoreMutation.isPending) ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
+            <div className="flex-1 flex flex-col h-full bg-white relative">
+                {/* Loading State */}
+                {(!activeFragment || restoreMutation.isPending) && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950 z-20">
                     <Loader2Icon className="size-8 animate-spin text-white mb-4" />
                     <p className="text-sm text-gray-400 font-medium">
-                        {restoreMutation.isPending ? "Restoring..." : "Generating..."}
+                        {restoreMutation.isPending ? "Restoring Preview..." : "Generating..."}
                     </p>
-                  </div>
-                ) : (
-                  <div className="w-full h-full bg-white pt-6">
-                     {/* Iframe Content - added top padding to avoid notch */}
-                     <FragmentWeb data={activeFragment} />
+                    {/* Allow retry if it takes too long or fails - manually triggerable via refresh button in top bar usually, but let's add one here if stuck */}
+                     <Button
+                        variant="link"
+                        size="sm"
+                        className="mt-2 text-blue-400"
+                        onClick={() => restoreMutation.mutate({ projectId })}
+                     >
+                        Force Refresh
+                     </Button>
                   </div>
                 )}
-              </div>
+
+                {/* Iframe Content - Full Width/Height */}
+                {activeFragment && (
+                    <div className="flex-1 w-full h-full">
+                         <FragmentWeb data={activeFragment} />
+                    </div>
+                )}
             </div>
           )}
         </div>
