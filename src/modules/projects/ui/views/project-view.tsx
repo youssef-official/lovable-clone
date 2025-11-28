@@ -29,7 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTRPC } from "@/trpc/client";
-import { trpc } from "@/trpc/client";
+
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
 
