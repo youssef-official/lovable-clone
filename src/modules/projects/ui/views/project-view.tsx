@@ -28,10 +28,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api } from "@/trpc/client";
+import { useTRPC } from "@/trpc/client";
 
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 
 interface Props {
   projectId: string;
@@ -40,8 +41,9 @@ interface Props {
 export const ProjectView = ({ projectId }: Props) => {
   const { has } = useAuth();
   const hasProAccess = has?.({ permission: "pro" });
+  const router = useRouter();
 
-  const trpc = api;
+  const trpc = useTRPC();
   const [subdomain, setSubdomain] = useState("");
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
 
@@ -52,10 +54,6 @@ export const ProjectView = ({ projectId }: Props) => {
         onSuccess: (data) => {
              toast.success("Preview restored! It may take a minute to start.");
              if (activeFragment) {
-                 // Update the local fragment URL to force a re-render or at least show the new URL
-                 // In a real app we might want to refetch the fragment or update the cache.
-                 // For now, let's just update the state if we can, or just let the user see the new URL on next load?
-                 // Actually, we should update the activeFragment state.
                  setActiveFragment({ ...activeFragment, sandboxUrl: data.url });
              }
         },
@@ -88,16 +86,13 @@ export const ProjectView = ({ projectId }: Props) => {
   };
   const [tabState, setTabState] = useState<"preview" | "code">("preview");
 
-  const { data: projectData, isLoading: isProjectLoading } = trpc.projects.getOne.useQuery({ id: projectId }); // Fixed tRPC call 
+  const { data: projectData, isLoading: isProjectLoading } = trpc.projects.getOne.useQuery({ id: projectId });
 
-  const [mobileTab, setMobileTab] = useState<"chat" | "preview">("preview"); // Set default to preview as per Lovable style
-
-  // Mobile layout check or CSS-based toggling
-  // Since we are server-rendering initially, we can't rely on window.width easily without hydration mismatch.
-  // But we can use CSS classes. Tailwind 'md:flex' etc.
+  const [mobileTab, setMobileTab] = useState<"chat" | "preview">("preview");
 
   return (
     <div className="h-screen flex flex-col md:flex-row relative">
+      {/* Desktop View - Unchanged */}
       <ResizablePanelGroup direction="horizontal" className="hidden md:flex flex-1">
         <ResizablePanel
           defaultSize={35}
@@ -205,32 +200,40 @@ export const ProjectView = ({ projectId }: Props) => {
         </ResizablePanel>
       </ResizablePanelGroup>
 
-	      {/* Mobile View Implementation - New Lovable Style */}
-      <div className="md:hidden flex-1 flex flex-col min-h-0 relative bg-[#111111] text-white">
+      {/* Mobile View Implementation - Lovable Style */}
+      <div className="md:hidden flex flex-col h-[100dvh] bg-[#0A0A0A] text-white">
         {/* 1. Top Navigation Bar (Glassy, Blurred, Transparent) */}
-        <div className="fixed top-0 left-0 right-0 z-40 p-4 backdrop-blur-lg bg-black/30 border-b border-white/10">
-          <div className="flex items-center justify-between max-w-sm mx-auto">
-            <Button variant="ghost" size="icon" className="text-white/80 hover:text-white">
+        <div className="absolute top-0 left-0 right-0 z-50 p-4 backdrop-blur-md bg-black/20 border-b border-white/5">
+          <div className="flex items-center justify-between max-w-md mx-auto">
+            <Button
+                variant="ghost"
+                size="icon"
+                className="text-white/80 hover:text-white hover:bg-white/10 rounded-full"
+                onClick={() => router.back()}
+            >
               <ArrowLeftIcon className="size-5" />
             </Button>
-            <div className="flex items-center gap-1">
-	              <span className="text-lg font-semibold truncate max-w-[150px]">
-		                {/* Use project name from trpc query */}
-		                {isProjectLoading ? "Loading..." : projectData?.name || "Project"}
-	              </span>
-              <ChevronDownIcon className="size-4 text-white/60" />
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
+                <span className="text-sm font-medium truncate max-w-[150px]">
+                    {isProjectLoading ? "Loading..." : projectData?.name || "Project"}
+                </span>
+                <ChevronDownIcon className="size-3 text-white/50" />
             </div>
-            <Button variant="ghost" size="icon" className="text-white/80 hover:text-white">
+            <Button
+                variant="ghost"
+                size="icon"
+                className="text-white/80 hover:text-white hover:bg-white/10 rounded-full"
+            >
               <SettingsIcon className="size-5" />
             </Button>
           </div>
         </div>
 
-        {/* 2. Main Content Area - Adjust padding for fixed header/footer */}
-        <div className="flex-1 overflow-y-auto pt-[72px] pb-[100px] flex justify-center items-center">
+        {/* 2. Main Content Area */}
+        <div className="flex-1 flex flex-col w-full relative pt-[72px] pb-[90px]">
           {mobileTab === "chat" ? (
-            <div className="flex flex-col h-full w-full">
-              {/* Chat Content - Keep MessagesContainer, remove ProjectHeader */}
+            <div className="flex-1 h-full min-h-0 flex flex-col">
+              {/* Chat Content */}
               <MessagesContainer
                 projectId={projectId}
                 activeFragment={activeFragment}
@@ -238,29 +241,27 @@ export const ProjectView = ({ projectId }: Props) => {
               />
             </div>
           ) : (
-            <div className="flex flex-col h-full w-full p-4">
+            <div className="flex-1 flex items-center justify-center p-6 h-full">
               {/* Preview Content - Mobile Frame */}
-              <div className="relative w-full max-w-xs aspect-[9/16] mx-auto bg-black rounded-[3rem] shadow-[0_0_0_10px_#222,0_0_0_12px_#333,0_0_0_15px_#444] overflow-hidden">
-                {/* Placeholder for Speaker/Camera Notch */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/3 h-6 bg-black rounded-b-xl z-10"></div>
+              <div className="relative w-full max-w-[320px] aspect-[9/18] bg-black rounded-[3rem] shadow-[0_0_0_8px_#1a1a1a,0_0_0_10px_#262626] overflow-hidden border border-white/10 ring-1 ring-white/5">
                 
-                {/* Loading State */}
-                {restoreMutation.isPending ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black">
-                    <Loader2Icon className="size-8 animate-spin text-white/80" />
+                {/* Dynamic Island / Notch */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 h-6 w-24 bg-black rounded-b-xl z-20 flex justify-center items-center">
+                    <div className="w-12 h-1 bg-[#1a1a1a] rounded-full mt-2"></div>
+                </div>
+
+                {/* Loading State or Content */}
+                {(!activeFragment || restoreMutation.isPending) ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
+                    <Loader2Icon className="size-8 animate-spin text-white mb-4" />
+                    <p className="text-sm text-gray-400 font-medium">
+                        {restoreMutation.isPending ? "Restoring..." : "Generating..."}
+                    </p>
                   </div>
                 ) : (
-                  <div className="w-full h-full p-2">
-                    {/* Iframe/FragmentWeb - Needs to be styled as an iframe with rounded corners */}
-                    <div className="w-full h-full bg-white rounded-2xl overflow-hidden border border-gray-700">
-                      {activeFragment ? (
-                        <FragmentWeb data={activeFragment} />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-gray-500">
-                          No active preview.
-                        </div>
-                      )}
-                    </div>
+                  <div className="w-full h-full bg-white pt-6">
+                     {/* Iframe Content - added top padding to avoid notch */}
+                     <FragmentWeb data={activeFragment} />
                   </div>
                 )}
               </div>
@@ -268,42 +269,45 @@ export const ProjectView = ({ projectId }: Props) => {
           )}
         </div>
 
-        {/* 3. Bottom Floating Bar (Rounded Pill) */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 p-4">
-          <div className="flex items-center justify-center">
-            <div className="relative bg-black/50 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl p-1.5 flex items-center gap-1 w-fit">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`rounded-full px-6 transition-all duration-300 font-medium ${mobileTab === "chat" ? "bg-white/10 text-white" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+        {/* 3. Bottom Floating Bar */}
+        <div className="absolute bottom-6 left-0 right-0 z-50 flex justify-center items-center px-4 pointer-events-none">
+          <div className="relative pointer-events-auto flex items-center">
+            {/* Pill Tabs */}
+            <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl p-1.5 flex items-center gap-1">
+              <button
                 onClick={() => setMobileTab("chat")}
+                className={`
+                    relative px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300
+                    ${mobileTab === "chat"
+                        ? "text-black bg-white shadow-sm"
+                        : "text-gray-400 hover:text-white hover:bg-white/5"}
+                `}
               >
                 Chat
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`rounded-full px-6 transition-all duration-300 font-medium ${mobileTab === "preview" ? "bg-white/10 text-white" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+              </button>
+              <button
                 onClick={() => setMobileTab("preview")}
+                className={`
+                    relative px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300
+                    ${mobileTab === "preview"
+                        ? "text-black bg-white shadow-sm"
+                        : "text-gray-400 hover:text-white hover:bg-white/5"}
+                `}
               >
                 Preview
-              </Button>
+              </button>
             </div>
-            {/* Floating Circular Action Button */}
-            <Button
-              variant="default"
-              size="icon"
-              className="absolute right-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full size-12 shadow-lg hover:bg-white/20 transition-colors"
+
+            {/* Circular Action Button */}
+            <button
               onClick={() => setIsPublishDialogOpen(true)}
+              className="ml-3 bg-white text-black p-3.5 rounded-full shadow-lg hover:bg-gray-200 transition-colors active:scale-95 flex items-center justify-center"
             >
-              <UploadIcon className="size-5 text-white" />
-            </Button>
+              <UploadIcon className="size-5" />
+            </button>
           </div>
         </div>
       </div>
-
-
-
 
     </div>
   );
