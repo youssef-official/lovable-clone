@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { prisma } from "@/lib/db";
+import { auth } from "@clerk/nextjs/server";
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
@@ -30,11 +32,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: data.error_description || "Failed to get token" }, { status: 400 });
   }
 
-  // Set HTTP-only cookie
-  // We should redirect back to the project page ideally, but we don't know the ID here easily unless passed in state.
-  // For now, we redirect to home or a generic "success" page which closes the popup.
-  // Actually, usually this flow happens in a popup.
+  const { userId } = await auth();
+  if (userId) {
+      await prisma.gitHubToken.upsert({
+          where: { userId },
+          update: { token: data.access_token },
+          create: { userId, token: data.access_token },
+      });
+  }
 
+  // Set HTTP-only cookie as fallback
   const cookieStore = await cookies();
   cookieStore.set("gh_token", data.access_token, {
       httpOnly: true,

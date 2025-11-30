@@ -36,9 +36,19 @@ export const projectsRouter = createTRPCRouter({
         }
         const files = project.messages[0].fragment.files as Record<string, string>;
 
-        // 2. Get GitHub Token from Cookie
-        const cookieStore = await cookies();
-        const token = cookieStore.get("gh_token")?.value;
+        // 2. Get GitHub Token from DB first, then Cookie
+        let token: string | undefined;
+
+        const dbToken = await prisma.gitHubToken.findUnique({
+             where: { userId: ctx.auth.userId }
+        });
+
+        if (dbToken) {
+            token = dbToken.token;
+        } else {
+            const cookieStore = await cookies();
+            token = cookieStore.get("gh_token")?.value;
+        }
 
         if (!token) {
             throw new TRPCError({ code: "UNAUTHORIZED", message: "GitHub not connected" });
@@ -49,10 +59,6 @@ export const projectsRouter = createTRPCRouter({
             const { user, repoName, exists } = await createGitHubRepo(token, input.repoName);
 
             // 4. Push files
-            // Logic differs slightly if it's an update vs init, but pushToGitHub handles basic "push to main".
-            // If it exists, we just commit on top.
-            // If it's new, we commit to empty (handled by auto_init or careful logic).
-
             const commitMessage = exists
                 ? `Update project (ID: ${input.projectId.slice(0, 8)})`
                 : "Initial commit via Vibe";
@@ -234,6 +240,13 @@ export const projectsRouter = createTRPCRouter({
             code: "UNAUTHORIZED",
             message: "You must be logged in to create a project.",
           });
+        }
+
+        if (error instanceof Error && (error.message.includes("limit reached"))) {
+             throw new TRPCError({
+                 code: "TOO_MANY_REQUESTS",
+                 message: error.message
+             });
         }
 
         if (error instanceof Error) {

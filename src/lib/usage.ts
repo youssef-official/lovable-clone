@@ -31,6 +31,7 @@ export function getEgyptMonthString() {
     timeZone: "Africa/Cairo",
     year: "numeric",
     month: "2-digit",
+    day: "2-digit",
   };
   const parts = new Intl.DateTimeFormat("en-US", options).formatToParts(date);
   const year = parts.find((p) => p.type === "year")?.value;
@@ -94,16 +95,17 @@ export async function consumeCredits() {
   const limiters = getLimiters(userId, isPro);
 
   if (limiters.isPro && limiters.monthly) {
+    // Pro users: Only consume monthly, no daily limit.
     await limiters.monthly.limiter.consume(limiters.monthly.key, 1);
   } else if (!limiters.isPro && limiters.monthly && limiters.daily) {
-    // Check Daily first (to prevent wasting monthly credits if daily limit reached)
+    // Free users: Check Daily limit first.
     try {
       await limiters.daily.limiter.consume(limiters.daily.key, 1);
     } catch (e) {
        throw new Error("Daily credit limit reached");
     }
 
-    // Check Monthly second
+    // Free users: Check Monthly limit second.
     try {
       await limiters.monthly.limiter.consume(limiters.monthly.key, 1);
     } catch (e) {
@@ -171,16 +173,28 @@ export async function addCredits(userId: string, points: number) {
      const now = new Date();
      const expireAt = new Date(now.getTime() + MONTHLY_DURATION * 1000);
 
+     // NOTE: rate-limiter-flexible usually treats 'points' in DB as "consumed".
+     // If we want to RESET credits, we should set 'points' to 0 (meaning 0 consumed).
+     // If we are setting a CUSTOM LIMIT, standard RateLimiterPrisma doesn't easily support per-user limits
+     // without using 'insurance' or custom logic.
+     // Assuming 'addCredits' here is intended to RESET the user's usage (give them a fresh start),
+     // we set consumed points to 0.
+     // If 'points' argument meant "New Limit", we can't easily change the limit per user with this setup.
+     // However, typically admin tools 'add credits' means 'reset usage'.
+
+     // Correcting the logic: Set 'points' (consumed) to 0.
+     // The 'remainingPoints' column is for our reference if we want to use it, but library uses 'points'.
+
      await prisma.usage.upsert({
         where: { key },
         update: {
-            points: pts,
-            remainingPoints: pts, // Reset remaining to full points
+            points: 0, // Reset consumed to 0
+            remainingPoints: pts, // Store limit for reference if needed, or remaining (full)
             expire: expireAt
         },
         create: {
             key,
-            points: pts,
+            points: 0, // Reset consumed to 0
             remainingPoints: pts,
             expire: expireAt
         }

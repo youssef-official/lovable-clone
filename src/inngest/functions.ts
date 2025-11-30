@@ -24,12 +24,29 @@ export const codeAgentFunction = inngest.createFunction(
   async ({ event, step }) => {
     // 1. Get or Create Sandbox ID
     // We use a longer timeout.
-    const sandboxId = await step.run("get-sandbox-id", async () => {
-      const sandbox = await Sandbox.create("base", {
-        timeoutMs: 3600_000, // 1 hour
-      });
-      return sandbox.sandboxId;
-    });
+    let sandboxId: string = "";
+    try {
+        sandboxId = await step.run("get-sandbox-id", async () => {
+          const sandbox = await Sandbox.create("base", {
+            timeoutMs: 3600_000, // 1 hour
+          });
+          return sandbox.sandboxId;
+        });
+    } catch (e: any) {
+        // If E2B fails to start, we must report this error specifically.
+        console.error("Failed to create sandbox:", e);
+        await step.run("report-sandbox-error", async () => {
+            await prisma.message.create({
+                data: {
+                    projectId: event.data.projectId,
+                    content: `System Error: Failed to initialize coding environment. ${e.message || "Please check system configuration."}`,
+                    role: "ASSISTANT",
+                    type: "ERROR",
+                }
+            });
+        });
+        return; // Exit
+    }
 
     // 2. Fetch History
     const history = await step.run("fetch-history", async () => {
@@ -64,9 +81,6 @@ ${event.data.value}
             const result = await sandbox.commands.run(cmd);
             return result;
         } catch (e: any) {
-             // If sandbox is dead, we can't recover easily in the middle of a run.
-             // We throw so Inngest can potentially retry the whole function from scratch (if configured)
-             // or just fail.
              console.error(`Sandbox command failed: ${e.message}`);
              throw e;
         }
@@ -202,11 +216,19 @@ ${event.data.value}
     let result;
     try {
         result = await network.run(fullPrompt);
-    } catch (e) {
+    } catch (e: any) {
         console.error("Network run failed:", e);
         // If network run fails (e.g. LLM error, sandbox death), we try to return a graceful failure.
-        // We set isError = true manually.
-        result = { state: { data: { summary: "", files: {} } } };
+        // We set isError = true manually with the specific error message.
+        result = {
+            state: {
+                data: {
+                    summary: `Internal Error: ${e.message || "Unknown error occurred during execution."}`,
+                    files: {}
+                }
+            },
+            isFatal: true // Marker for our logic below
+        };
     }
 
     // Attempt to keep server running
@@ -223,17 +245,20 @@ ${event.data.value}
         }
     });
 
-    let isError =
-      !result.state.data.summary ||
-      Object.keys(result.state.data.files || {}).length === 0;
+    // Check for success or error
+    // If result was marked fatal, we force error.
+    const isError = (result as any).isFatal ||
+      (!result.state.data.summary ||
+      Object.keys(result.state.data.files || {}).length === 0);
 
+    // Specific check: If we have files but no summary, it's partially successful.
     if (
+      !isError &&
       !result.state.data.summary &&
       Object.keys(result.state.data.files || {}).length > 0
     ) {
       result.state.data.summary =
         "Code generation completed successfully, but no summary was provided.";
-      isError = false;
     }
 
     // Get URL, but fail gracefully if sandbox is dead
@@ -252,10 +277,14 @@ ${event.data.value}
     await step.run("save-result", async () => {
       if (isError) {
         // Log the actual error if available in context, or generic
+        const errorContent = (result as any).isFatal
+             ? result.state.data.summary // We stuffed the error here above
+             : "Something went wrong. Please try again.";
+
         return await prisma.message.create({
           data: {
             projectId: event.data.projectId,
-            content: "Something went wrong. Please try again.", // Localize if possible
+            content: errorContent,
             role: "ASSISTANT",
             type: "ERROR",
           },
