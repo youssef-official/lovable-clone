@@ -24,17 +24,43 @@ export const codeAgentFunction = inngest.createFunction(
   async ({ event, step }) => {
     const sandboxId = await step.run("get-sandbox-id", async () => {
       // Using 'base' template which is available to all E2B users by default
-      // If you have a custom template, replace 'base' with your template name
       const sandbox = await Sandbox.create("base", {
         timeoutMs: 3600_000,
       });
       return sandbox.sandboxId;
     });
 
-    // e.g. transcript step
-    // await step.sleep("wait-a-moment", "5s");
+    // Fetch conversation history
+    const history = await step.run("fetch-history", async () => {
+      const messages = await prisma.message.findMany({
+        where: {
+            projectId: event.data.projectId
+        },
+        orderBy: {
+            createdAt: 'asc'
+        },
+        take: 20 // Reasonable limit to prevent token overflow
+      });
 
-    // Create a new agent with a system prompt (you can add optional tools, too)
+      // Format history as a string
+      return messages.map(m => {
+          // If it has a fragment/files, we might want to mention it, but usually content is enough.
+          // We exclude the massive file dumps from the history to save tokens,
+          // just keeping the "RESULT" summary or "USER" request.
+          // If role is assistant and content is "Code generation completed...", it's fine.
+          return `${m.role}: ${m.content}`;
+      }).join("\n");
+    });
+
+    const fullPrompt = `
+History of this project:
+${history}
+
+Current Request:
+${event.data.value}
+`;
+
+    // Create a new agent with a system prompt
     const codeAgent = createAgent<AgentState>({
       name: "code-agent",
       description: "An expert coding agent",
@@ -93,12 +119,6 @@ export const codeAgentFunction = inngest.createFunction(
             { files },
             { step, network }: Tool.Options<AgentState>,
           ) => {
-            /**
-             * {
-             *   /app.tsx: "<p>hi</p>",
-             * }
-             */
-
             const newFiles = await step?.run(
               "createOrUpdateFiles",
               async () => {
@@ -134,7 +154,6 @@ export const codeAgentFunction = inngest.createFunction(
                 const sandbox = await getSandbox(sandboxId);
                 const contents = [];
                 for (const file of files) {
-                  // Prevent hallucination to ensure file exists
                   const content = await sandbox.files.read(file);
                   contents.push({ path: file, content });
                 }
@@ -175,21 +194,15 @@ export const codeAgentFunction = inngest.createFunction(
       },
     });
 
-    const result = await network.run(event.data.value);
+    // Pass the full prompt including history
+    const result = await network.run(fullPrompt);
 
-    // Fallback: Ensure server is running if the agent didn't start it
-    // The "base" sandbox might not have a running process.
-    // We check if port 3000 is open, if not, we try to start 'npm run dev'
-    // This is a safety net.
     await step.run("ensure-server-running", async () => {
         try {
             const sandbox = await getSandbox(sandboxId);
-            // We can't easily check port status via SDK directly without making a request.
-            // But we can blindly run the start command in background if package.json exists.
             const exists = await sandbox.files.exists("package.json");
             if (exists) {
                 console.log("Ensuring server is running...");
-                // Run in background
                 await sandbox.commands.run("npm run dev > /dev/null 2>&1 &");
             }
         } catch (e) {
@@ -209,10 +222,6 @@ export const codeAgentFunction = inngest.createFunction(
         "Code generation completed successfully, but no summary was provided.";
       isError = false;
     }
-
-    // const { output } = await codeAgent.run(
-    //   `Write the following snippet: ${event.data.value}`,
-    // );
 
     const sandboxUrl = await step.run("get-sandbox-url", async () => {
       const sandbox = await getSandbox(sandboxId);
