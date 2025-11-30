@@ -73,8 +73,15 @@ export const MessageForm = ({ projectId }: MessageFormProps) => {
     <Form {...form}>
       {showUsage && (
         <Usage
-          points={usage.remainingPoints}
-          msBeforeNext={usage.msBeforeNext}
+          isPro={usage.isPro}
+          points={
+            usage.isPro
+              ? usage.monthly.remaining
+              : Math.min(
+                  usage.daily?.remaining ?? 0,
+                  usage.monthly?.remaining ?? 0,
+                )
+          }
         />
       )}
       <form

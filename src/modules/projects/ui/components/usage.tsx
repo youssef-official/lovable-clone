@@ -1,37 +1,44 @@
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@clerk/nextjs";
 import { formatDuration, intervalToDuration } from "date-fns";
 import { CrownIcon } from "lucide-react";
 import Link from "next/link";
 
 interface Props {
   points: number;
-  msBeforeNext: number;
+  msBeforeNext?: number;
+  isPro?: boolean;
 }
 
-export default function Usage({ points, msBeforeNext }: Props) {
-  const { has } = useAuth();
-  const hasProAccess = has?.({ permission: "pro" });
+export default function Usage({ points, msBeforeNext, isPro = false }: Props) {
+  const resetTime = msBeforeNext
+    ? new Date(Date.now() + msBeforeNext)
+    : new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   return (
     <div className="rounded-t-xl bg-background border border-b-0 p-2.5">
       <div className="flex items-center gap-x-2">
         <div>
           <p className="text-sm">
-            {points} {hasProAccess ? "" : "free"} credits remaining
+            {points} {isPro ? "" : "free"} credits remaining
           </p>
-          <p className="text-xs text-muted-foreground">
-            Resets in{" "}
-            {formatDuration(
-              intervalToDuration({
-                start: new Date(),
-                end: new Date(Date.now() + msBeforeNext),
-              }),
-              { format: ["months", "days", "hours"] },
-            )}
-          </p>
+          {msBeforeNext ? (
+             <p className="text-xs text-muted-foreground">
+               Resets in{" "}
+               {formatDuration(
+                 intervalToDuration({
+                   start: new Date(),
+                   end: resetTime,
+                 }),
+                 { format: ["months", "days", "hours"] },
+               )}
+             </p>
+          ) : !isPro ? (
+            <p className="text-xs text-muted-foreground">
+               Resets daily at 12 AM Egypt
+            </p>
+          ) : null}
         </div>
-        {!hasProAccess && (
+        {!isPro && (
           <Button asChild size="sm" variant={"tertiary"} className="ml-auto">
             <Link href="/pricing">
               <CrownIcon /> Upgrade
