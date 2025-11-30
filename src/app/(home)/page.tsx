@@ -1,5 +1,6 @@
 import { ProjectForm } from "@/modules/home/ui/components/project-form";
 import { ProjectsList } from "@/modules/home/ui/components/projects-list";
+import { CreditStatus } from "@/modules/home/ui/components/credit-status";
 import Image from "next/image";
 
 export default function Page() {
@@ -23,6 +24,9 @@ export default function Page() {
         </p>
         <div className="max-w-3xl mx-auto w-full">
           <ProjectForm />
+        </div>
+        <div className="max-w-sm mx-auto w-full pt-8">
+          <CreditStatus />
         </div>
       </section>
       <ProjectsList />
