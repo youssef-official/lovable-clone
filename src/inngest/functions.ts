@@ -22,19 +22,56 @@ export const codeAgentFunction = inngest.createFunction(
   { id: "code-agent" },
   { event: "code-agent/run" },
   async ({ event, step }) => {
+    // 1. Get or Create Sandbox ID
+    // We use a longer timeout.
     const sandboxId = await step.run("get-sandbox-id", async () => {
-      // Using 'base' template which is available to all E2B users by default
-      // If you have a custom template, replace 'base' with your template name
       const sandbox = await Sandbox.create("base", {
-        timeoutMs: 3600_000,
+        timeoutMs: 3600_000, // 1 hour
       });
       return sandbox.sandboxId;
     });
 
-    // e.g. transcript step
-    // await step.sleep("wait-a-moment", "5s");
+    // 2. Fetch History
+    const history = await step.run("fetch-history", async () => {
+      const messages = await prisma.message.findMany({
+        where: {
+            projectId: event.data.projectId
+        },
+        orderBy: {
+            createdAt: 'asc'
+        },
+        take: 20
+      });
 
-    // Create a new agent with a system prompt (you can add optional tools, too)
+      return messages.map(m => {
+          return `${m.role}: ${m.content}`;
+      }).join("\n");
+    });
+
+    const fullPrompt = `
+History of this project:
+${history}
+
+Current Request:
+${event.data.value}
+`;
+
+    // 3. Define Tools
+    // Helper to safely run sandbox commands
+    const runSandboxCommand = async (cmd: string) => {
+        try {
+            const sandbox = await getSandbox(sandboxId);
+            const result = await sandbox.commands.run(cmd);
+            return result;
+        } catch (e: any) {
+             // If sandbox is dead, we can't recover easily in the middle of a run.
+             // We throw so Inngest can potentially retry the whole function from scratch (if configured)
+             // or just fail.
+             console.error(`Sandbox command failed: ${e.message}`);
+             throw e;
+        }
+    };
+
     const codeAgent = createAgent<AgentState>({
       name: "code-agent",
       description: "An expert coding agent",
@@ -44,7 +81,7 @@ export const codeAgentFunction = inngest.createFunction(
         apiKey: process.env.MINIMAX_API_KEY,
         baseUrl: "https://api.minimax.io/v1",
         defaultParameters: {
-          temperature: 0.1, // Randomness (higher = more random)
+          temperature: 0.1,
         },
       }),
       tools: [
@@ -57,23 +94,18 @@ export const codeAgentFunction = inngest.createFunction(
           handler: async ({ command }, { step }) => {
             return await step?.run("terminal", async () => {
               const buffers = { stdout: "", stderr: "" };
-
               try {
+                // Use the helper which uses getSandbox wrapper
                 const sandbox = await getSandbox(sandboxId);
                 const result = sandbox.commands.run(command, {
-                  onStdout: (data: string) => {
-                    buffers.stdout += data;
-                  },
-                  onStderr: (data: string) => {
-                    buffers.stderr += data;
-                  },
+                   onStdout: (data: string) => { buffers.stdout += data; },
+                   onStderr: (data: string) => { buffers.stderr += data; },
                 });
                 return (await result).stdout;
               } catch (e) {
-                console.error(
-                  `Command failed: ${e} \nstdout: ${buffers.stdout}\nstderror: ${buffers.stderr}`,
-                );
-                return `Command failed: ${e} \nstdout: ${buffers.stdout}\nstderror: ${buffers.stderr}`;
+                const msg = `Command failed: ${e} \nstdout: ${buffers.stdout}\nstderror: ${buffers.stderr}`;
+                console.error(msg);
+                return msg;
               }
             });
           },
@@ -93,12 +125,6 @@ export const codeAgentFunction = inngest.createFunction(
             { files },
             { step, network }: Tool.Options<AgentState>,
           ) => {
-            /**
-             * {
-             *   /app.tsx: "<p>hi</p>",
-             * }
-             */
-
             const newFiles = await step?.run(
               "createOrUpdateFiles",
               async () => {
@@ -109,7 +135,6 @@ export const codeAgentFunction = inngest.createFunction(
                     await sandbox.files.write(file.path, file.content);
                     updatedFiles[file.path] = file.content;
                   }
-
                   return updatedFiles;
                 } catch (e) {
                   return "Error: " + e;
@@ -134,7 +159,6 @@ export const codeAgentFunction = inngest.createFunction(
                 const sandbox = await getSandbox(sandboxId);
                 const contents = [];
                 for (const file of files) {
-                  // Prevent hallucination to ensure file exists
                   const content = await sandbox.files.read(file);
                   contents.push({ path: file, content });
                 }
@@ -175,21 +199,23 @@ export const codeAgentFunction = inngest.createFunction(
       },
     });
 
-    const result = await network.run(event.data.value);
+    let result;
+    try {
+        result = await network.run(fullPrompt);
+    } catch (e) {
+        console.error("Network run failed:", e);
+        // If network run fails (e.g. LLM error, sandbox death), we try to return a graceful failure.
+        // We set isError = true manually.
+        result = { state: { data: { summary: "", files: {} } } };
+    }
 
-    // Fallback: Ensure server is running if the agent didn't start it
-    // The "base" sandbox might not have a running process.
-    // We check if port 3000 is open, if not, we try to start 'npm run dev'
-    // This is a safety net.
+    // Attempt to keep server running
     await step.run("ensure-server-running", async () => {
         try {
             const sandbox = await getSandbox(sandboxId);
-            // We can't easily check port status via SDK directly without making a request.
-            // But we can blindly run the start command in background if package.json exists.
             const exists = await sandbox.files.exists("package.json");
             if (exists) {
                 console.log("Ensuring server is running...");
-                // Run in background
                 await sandbox.commands.run("npm run dev > /dev/null 2>&1 &");
             }
         } catch (e) {
@@ -210,23 +236,26 @@ export const codeAgentFunction = inngest.createFunction(
       isError = false;
     }
 
-    // const { output } = await codeAgent.run(
-    //   `Write the following snippet: ${event.data.value}`,
-    // );
-
+    // Get URL, but fail gracefully if sandbox is dead
     const sandboxUrl = await step.run("get-sandbox-url", async () => {
-      const sandbox = await getSandbox(sandboxId);
-      const host = sandbox.getHost(3000);
-      return `https://${host}`;
+      try {
+          const sandbox = await getSandbox(sandboxId);
+          const host = sandbox.getHost(3000);
+          return `https://${host}`;
+      } catch (e) {
+          console.warn("Could not get sandbox URL (sandbox dead?)", e);
+          return "";
+      }
     });
 
     // Save to db
     await step.run("save-result", async () => {
       if (isError) {
+        // Log the actual error if available in context, or generic
         return await prisma.message.create({
           data: {
             projectId: event.data.projectId,
-            content: "Something went wrong. Please try again.",
+            content: "Something went wrong. Please try again.", // Localize if possible
             role: "ASSISTANT",
             type: "ERROR",
           },

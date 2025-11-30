@@ -6,8 +6,8 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { MessagesContainer } from "../components/messages-container";
-import { ArrowLeftIcon, ChevronDownIcon, SettingsIcon, UploadIcon, Loader2Icon } from "lucide-react";
-import { Suspense, useState } from "react";
+import { ArrowLeftIcon, ChevronDownIcon, SettingsIcon, UploadIcon, Loader2Icon, DownloadIcon, GithubIcon } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
 import { Fragment } from "@/generated/prisma";
 import { ProjectHeader } from "../components/project-header";
 import { FragmentWeb } from "../components/fragment-web";
@@ -33,6 +33,9 @@ import { useTRPC } from "@/trpc/client";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
+import Image from "next/image";
 
 interface Props {
   projectId: string;
@@ -46,8 +49,33 @@ export const ProjectView = ({ projectId }: Props) => {
   const trpc = useTRPC();
   const [subdomain, setSubdomain] = useState("");
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+  const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false);
 
   const [activeFragment, setActiveFragment] = useState<Fragment | null>(null);
+
+  // Deployment State
+  const [deployProvider, setDeployProvider] = useState<"cloudflare" | "vercel">("cloudflare");
+  const [cfAccountId, setCfAccountId] = useState("");
+  const [cfApiToken, setCfApiToken] = useState("");
+  const [vercelToken, setVercelToken] = useState("");
+
+  // GitHub State
+  const [repoName, setRepoName] = useState("");
+  const [githubConnected, setGithubConnected] = useState(false);
+
+  useEffect(() => {
+      // Check for GitHub connection on mount or via some ping mechanism
+      // Since we don't have a specific API for "status", we assume connected if we trigger it or store state in localstorage?
+      // Better: when the popup closes, we assume connection success.
+      const handleMessage = (event: MessageEvent) => {
+          if (event.data.type === 'GITHUB_CONNECTED') {
+              setGithubConnected(true);
+              toast.success("GitHub connected successfully!");
+          }
+      };
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   const restoreMutation = useMutation(
     trpc.projects.restoreSandbox.mutationOptions({
@@ -80,10 +108,71 @@ export const ProjectView = ({ projectId }: Props) => {
     })
   );
 
+  const githubSyncMutation = useMutation(
+      trpc.projects.syncToGithub.mutationOptions({
+          onSuccess: (data) => {
+              toast.success(`Synced to GitHub: ${data.repoName}`, {
+                  action: {
+                      label: "Open Repo",
+                      onClick: () => window.open(data.url, "_blank")
+                  }
+              });
+              setIsGitHubDialogOpen(false);
+          },
+          onError: (error) => {
+              if (error.message.includes("GitHub not connected")) {
+                  setGithubConnected(false);
+                  toast.error("Please connect GitHub first.");
+              } else {
+                  toast.error(error.message);
+              }
+          }
+      })
+  );
+
+  const handleGitHubConnect = () => {
+      window.open('/api/github/login', 'github_oauth', 'width=600,height=700');
+  };
+
+  const handleGitHubSync = () => {
+      if (!repoName) return;
+      githubSyncMutation.mutate({ projectId, repoName });
+  };
+
   const handlePublish = () => {
       if (!subdomain) return;
-      publishMutation.mutate({ projectId, subdomain });
+      publishMutation.mutate({
+        projectId,
+        subdomain,
+        provider: deployProvider,
+        cfAccountId: deployProvider === 'cloudflare' ? cfAccountId : undefined,
+        cfApiToken: deployProvider === 'cloudflare' ? cfApiToken : undefined,
+        vercelToken: deployProvider === 'vercel' ? vercelToken : undefined,
+      });
   };
+
+  const handleDownloadZip = async () => {
+    if (!activeFragment?.files) return;
+
+    const zip = new JSZip();
+    const files = activeFragment.files as Record<string, string>;
+
+    Object.entries(files).forEach(([path, content]) => {
+      // Remove leading slash if present to create valid zip structure
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      zip.file(cleanPath, content);
+    });
+
+    try {
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, `${projectData?.name || "project"}.zip`);
+      toast.success("Project downloaded successfully!");
+    } catch (error) {
+      toast.error("Failed to generate zip file.");
+      console.error(error);
+    }
+  };
+
   const [tabState, setTabState] = useState<"preview" | "code">("preview");
 
   const { data: projectData, isLoading: isProjectLoading } = useQuery(trpc.projects.getOne.queryOptions({ id: projectId }));
@@ -140,6 +229,70 @@ export const ProjectView = ({ projectId }: Props) => {
                   </Button>
               )}
               <div className="ml-auto flex items-center gap-x-2">
+                 <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDownloadZip}
+                    disabled={!activeFragment}
+                    title="Download Code"
+                 >
+                    <DownloadIcon className="size-4" />
+                 </Button>
+
+                {/* GitHub Button */}
+                <Dialog open={isGitHubDialogOpen} onOpenChange={setIsGitHubDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                        >
+                            <GithubIcon className="size-4" />
+                            Sync
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Sync to GitHub</DialogTitle>
+                            <DialogDescription>
+                                Push your code to a GitHub repository.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        {!githubConnected ? (
+                            <div className="flex flex-col items-center gap-4 py-6">
+                                <p className="text-center text-sm text-muted-foreground">
+                                    You need to connect your GitHub account to create repositories.
+                                </p>
+                                <Button onClick={handleGitHubConnect} className="w-full">
+                                    Connect GitHub
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label>Repository Name</Label>
+                                    <Input
+                                        placeholder="my-project-vibe"
+                                        value={repoName}
+                                        onChange={(e) => setRepoName(e.target.value.replace(/[^a-zA-Z0-9-_]/g, ''))}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        If the repo exists, we&apos;ll push a new commit. If not, we&apos;ll create it.
+                                    </p>
+                                </div>
+                                <Button
+                                    onClick={handleGitHubSync}
+                                    className="w-full"
+                                    disabled={!repoName || githubSyncMutation.isPending}
+                                >
+                                    {githubSyncMutation.isPending ? "Syncing..." : "Push to GitHub"}
+                                </Button>
+                            </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
+
                 {!hasProAccess && (
                   <Button asChild size="sm" variant={"tertiary"}>
                     <Link href="/pricing">
@@ -153,25 +306,79 @@ export const ProjectView = ({ projectId }: Props) => {
                             <RocketIcon className="mr-2 size-4" /> Publish
                         </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="max-w-md">
                         <DialogHeader>
                             <DialogTitle>Publish to the Web</DialogTitle>
                             <DialogDescription>
-                                Enter a unique subdomain to deploy your project instantly.
+                                Deploy your project to a custom domain.
                             </DialogDescription>
                         </DialogHeader>
+
                         <div className="space-y-4 py-4">
+                            {/* Provider Selection */}
+                            <div className="flex p-1 bg-muted rounded-lg">
+                                <button
+                                    onClick={() => setDeployProvider("cloudflare")}
+                                    className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${deployProvider === "cloudflare" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                                >
+                                    Cloudflare Pages
+                                </button>
+                                <button
+                                    onClick={() => setDeployProvider("vercel")}
+                                    className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${deployProvider === "vercel" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                                >
+                                    Vercel
+                                </button>
+                            </div>
+
                             <div className="space-y-2">
                                 <Label>Subdomain</Label>
                                 <div className="flex items-center gap-2">
                                     <Input
-                                        placeholder="my-awesome-app"
+                                        placeholder="my-app"
                                         value={subdomain}
                                         onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                                     />
-                                    <span className="text-muted-foreground text-sm">.youssef-elsayed.tech</span>
+                                    <span className="text-muted-foreground text-sm">
+                                        {deployProvider === "cloudflare" ? ".pages.dev" : ".vercel.app"}
+                                    </span>
                                 </div>
                             </div>
+
+                            {deployProvider === "cloudflare" && (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label>Cloudflare Account ID</Label>
+                                        <Input
+                                            placeholder="Your Account ID"
+                                            value={cfAccountId}
+                                            onChange={(e) => setCfAccountId(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Cloudflare API Token</Label>
+                                        <Input
+                                            type="password"
+                                            placeholder="Your API Token"
+                                            value={cfApiToken}
+                                            onChange={(e) => setCfApiToken(e.target.value)}
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                             {deployProvider === "vercel" && (
+                                <div className="space-y-2">
+                                    <Label>Vercel Access Token</Label>
+                                    <Input
+                                        type="password"
+                                        placeholder="Your Vercel Token"
+                                        value={vercelToken}
+                                        onChange={(e) => setVercelToken(e.target.value)}
+                                    />
+                                </div>
+                            )}
+
                             <Button
                                 onClick={handlePublish}
                                 className="w-full"
@@ -185,10 +392,10 @@ export const ProjectView = ({ projectId }: Props) => {
                 <UserControl />
               </div>
             </div>
-            <TabsContent value="preview">
+            <TabsContent value="preview" className="h-[calc(100%-48px)]">
               {activeFragment && <FragmentWeb data={activeFragment} />}
             </TabsContent>
-            <TabsContent value="code" className="min-h-0">
+            <TabsContent value="code" className="min-h-0 h-[calc(100%-48px)]">
               {!!activeFragment?.files && (
                 <FileExplorer
                   files={activeFragment.files as { [path: string]: string }}
@@ -301,12 +508,20 @@ export const ProjectView = ({ projectId }: Props) => {
             </div>
 
             {/* Circular Action Button */}
-            <button
-              onClick={() => setIsPublishDialogOpen(true)}
-              className="ml-3 bg-white text-black p-3.5 rounded-full shadow-lg hover:bg-gray-200 transition-colors active:scale-95 flex items-center justify-center"
-            >
-              <UploadIcon className="size-5" />
-            </button>
+            <div className="flex items-center gap-2 ml-3">
+                 <button
+                    onClick={handleDownloadZip}
+                     className="bg-white/90 text-black p-3.5 rounded-full shadow-lg hover:bg-white transition-colors active:scale-95 flex items-center justify-center"
+                 >
+                    <DownloadIcon className="size-5" />
+                 </button>
+                <button
+                  onClick={() => setIsPublishDialogOpen(true)}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3.5 rounded-full shadow-lg hover:brightness-110 transition-colors active:scale-95 flex items-center justify-center"
+                >
+                  <UploadIcon className="size-5" />
+                </button>
+            </div>
           </div>
         </div>
       </div>

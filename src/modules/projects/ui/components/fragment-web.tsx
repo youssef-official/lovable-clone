@@ -1,49 +1,57 @@
-import { Hint } from "@/components/hint";
-import { Button } from "@/components/ui/button";
 import { Fragment } from "@/generated/prisma";
-import { ExternalLinkIcon, RefreshCcwIcon } from "lucide-react";
-import { useState } from "react";
+import { SandpackProvider, SandpackPreview, SandpackLayout } from "@codesandbox/sandpack-react";
+import { useTheme } from "next-themes";
 
 interface Props {
   data: Fragment;
 }
 
 export function FragmentWeb({ data }: Props) {
-  const [fragmentKey, setFragmentKey] = useState(0);
-  const [copied, setCopied] = useState(false);
+  const { theme } = useTheme();
+  const files = data.files as Record<string, string>;
 
-  const onRefresh = () => {
-    setFragmentKey((prev) => prev + 1);
-  };
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(data.sandboxUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const [loading, setLoading] = useState(true);
+  const sandpackFiles: Record<string, string> = {};
+  Object.entries(files).forEach(([key, value]) => {
+      const cleanKey = key.startsWith('/') ? key.slice(1) : key;
+      sandpackFiles[cleanKey] = value;
+  });
 
   return (
-    <div className="flex flex-col w-full h-full relative">
-      <div className="relative flex-1 w-full h-full bg-background">
-         {loading && (
-             <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-10 text-muted-foreground gap-2">
-                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                 <p className="text-sm">Connecting to sandbox...</p>
-                 <p className="text-xs text-muted-foreground/50">If this takes too long, click Refresh or Restore.</p>
-             </div>
-         )}
-         <iframe
-            key={fragmentKey}
-            className="h-full w-full"
-            sandbox="allow-forms allow-scripts allow-same-origin"
-            loading="lazy"
-            src={data.sandboxUrl}
-            onLoad={() => setLoading(false)}
-            onError={() => setLoading(false)}
-        />
-      </div>
+    <div className="w-full h-full relative isolate flex flex-col">
+        <SandpackProvider
+            template="nextjs"
+            theme={theme === 'dark' ? 'dark' : 'light'}
+            files={sandpackFiles}
+            customSetup={{
+                dependencies: {
+                    "lucide-react": "latest",
+                    "clsx": "latest",
+                    "tailwind-merge": "latest",
+                    "date-fns": "latest",
+                    "react-day-picker": "latest",
+                    "@radix-ui/react-slot": "latest",
+                    "class-variance-authority": "latest",
+                }
+            }}
+            options={{
+                externalResources: ["https://cdn.tailwindcss.com"],
+                classes: {
+                  "sp-wrapper": "h-full",
+                  "sp-layout": "h-full",
+                  "sp-preview": "h-full",
+                }
+            }}
+            style={{ height: "100%", width: "100%" }}
+        >
+            <SandpackLayout className="!h-full !w-full !rounded-none !border-0 flex-1">
+                <SandpackPreview
+                    className="!h-full w-full"
+                    showOpenInCodeSandbox={false}
+                    showRefreshButton={true}
+                    style={{ height: "100%" }}
+                />
+            </SandpackLayout>
+        </SandpackProvider>
     </div>
   );
 }

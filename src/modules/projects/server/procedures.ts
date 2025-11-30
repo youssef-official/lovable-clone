@@ -6,9 +6,64 @@ import { generateSlug } from "random-word-slugs";
 import { TRPCError } from "@trpc/server";
 import { consumeCredits } from "@/lib/usage";
 import { createCloudflareProject, uploadToCloudflare, addDomainToProject } from "@/lib/cloudflare";
+import { deployToVercel } from "@/lib/vercel";
 import { Sandbox } from "@e2b/code-interpreter";
+import { cookies } from "next/headers";
+import { createGitHubRepo, pushToGitHub } from "@/lib/github";
 
 export const projectsRouter = createTRPCRouter({
+  syncToGithub: protectedProcedure
+    .input(z.object({
+        projectId: z.string(),
+        repoName: z.string().min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+        // 1. Get files
+        const project = await prisma.project.findUnique({
+            where: { id: input.projectId, userId: ctx.auth.userId },
+            include: {
+                messages: {
+                    where: { role: "ASSISTANT", type: "RESULT", fragment: { isNot: null } },
+                    orderBy: { createdAt: "desc" },
+                    take: 1,
+                    include: { fragment: true }
+                }
+            }
+        });
+
+        if (!project || project.messages.length === 0 || !project.messages[0].fragment) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Project or files not found" });
+        }
+        const files = project.messages[0].fragment.files as Record<string, string>;
+
+        // 2. Get GitHub Token from Cookie
+        const cookieStore = await cookies();
+        const token = cookieStore.get("gh_token")?.value;
+
+        if (!token) {
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "GitHub not connected" });
+        }
+
+        try {
+            // 3. Create or Check Repo
+            const { user, repoName, exists } = await createGitHubRepo(token, input.repoName);
+
+            // 4. Push files
+            // Logic differs slightly if it's an update vs init, but pushToGitHub handles basic "push to main".
+            // If it exists, we just commit on top.
+            // If it's new, we commit to empty (handled by auto_init or careful logic).
+
+            const commitMessage = exists
+                ? `Update project (ID: ${input.projectId.slice(0, 8)})`
+                : "Initial commit via Vibe";
+
+            const result = await pushToGitHub(token, user.login, repoName, files, commitMessage);
+            return { ...result, repoName };
+        } catch (e: any) {
+            console.error("GitHub Sync Error:", e);
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `GitHub Sync Failed: ${e.message}` });
+        }
+    }),
   restoreSandbox: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .mutation(async ({ input, ctx }) => {
@@ -40,35 +95,11 @@ export const projectsRouter = createTRPCRouter({
         const url = `https://${host}`;
 
         // Restore files
-        // E2B SDK doesn't support batch write easily? Actually writing one by one is fine for now.
         for (const [path, content] of Object.entries(files)) {
-             // Ensure directory exists? sandbox.files.write handles it usually?
-             // We might need to ensure paths are relative.
              const cleanPath = path.startsWith('/') ? path.substring(1) : path;
              await sandbox.files.write(cleanPath, content);
         }
 
-        // Install and start
-        // We assume package.json is in the files.
-        console.log("Restoring sandbox... Installing dependencies and starting server.");
-
-        // We run the install and dev command.
-        // We do NOT background the install part, because we want it to finish before we return 'success' to the UI
-        // (so the UI knows it's ready-ish).
-        // BUT npm install takes time. If we block, the request might timeout (Vercel has 10s limit on free tier, usually longer on others).
-        // If we block, the user waits.
-        // If we don't block, the user sees "Closed Port" immediately.
-
-        // Compromise: Run both in background, but user needs to wait.
-        // To make it more robust, we explicitly set the port 3000 to be open? No, Next.js does that.
-        // We add a small sleep to allow the process to spawn? No, that doesn't help with "npm install".
-
-        // The best approach for "restore" is to just trigger it and tell the user "It may take a minute".
-        // The previous command was correct: "npm install && npm run dev &"
-        // But maybe the output redirection is hiding errors.
-        // Let's log output to a file inside the sandbox for debugging if needed.
-
-        // Use --no-audit --no-fund to speed up install.
         const startCommand = "npm install --no-audit --no-fund --quiet && npm run dev > /home/user/server.log 2>&1 &";
         await sandbox.commands.run(startCommand, { timeoutMs: 0 });
 
@@ -84,6 +115,10 @@ export const projectsRouter = createTRPCRouter({
     .input(z.object({
         projectId: z.string(),
         subdomain: z.string().min(3).max(63).regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/),
+        provider: z.enum(['cloudflare', 'vercel']).optional().default('cloudflare'),
+        cfAccountId: z.string().optional(),
+        cfApiToken: z.string().optional(),
+        vercelToken: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
         // 1. Get the latest fragment/files for the project
@@ -104,38 +139,52 @@ export const projectsRouter = createTRPCRouter({
         }
 
         const files = project.messages[0].fragment.files as Record<string, string>;
+        const creds = {
+            provider: input.provider,
+            cfAccountId: input.cfAccountId,
+            cfApiToken: input.cfApiToken,
+            vercelToken: input.vercelToken,
+        };
 
-        // 2. Create/Check Cloudflare Project
-        try {
-            await createCloudflareProject(input.subdomain);
-        } catch (e) {
-            console.error("Failed to create CF project", e);
-             throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to initialize publishing" });
-        }
+        if (input.provider === 'vercel') {
+            try {
+                const result = await deployToVercel(input.subdomain, files, creds);
+                return { url: result.url };
+            } catch (e: any) {
+                console.error("Vercel Deployment Error", e);
+                throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Vercel deployment failed: ${e.message}` });
+            }
+        } else {
+            // Cloudflare
+            try {
+                await createCloudflareProject(input.subdomain, creds);
+            } catch (e) {
+                console.error("Failed to create CF project", e);
+                // Continue, as it might already exist
+            }
 
-        // 3. Upload Files
-        try {
-             const result = await uploadToCloudflare(input.subdomain, files);
-             if (!result.success) {
-                 throw new Error(result.errors?.[0]?.message || "Upload failed");
-             }
+            try {
+                 const result = await uploadToCloudflare(input.subdomain, files, creds);
+                 if (!result.success) {
+                     throw new Error(result.errors?.[0]?.message || "Upload failed");
+                 }
 
-             // 4. Add Custom Domain
-             // We try to add the custom subdomain.youssef-elsayed.tech
-             const customDomain = `${input.subdomain}.youssef-elsayed.tech`;
-             try {
-                await addDomainToProject(input.subdomain, customDomain);
-             } catch (domainError) {
-                console.warn("Failed to add custom domain, but project published:", domainError);
-                // We don't fail the whole request, as the *.pages.dev URL is still valid.
-             }
+                 if (!input.cfAccountId) {
+                     const customDomain = `${input.subdomain}.youssef-elsayed.tech`;
+                     try {
+                        await addDomainToProject(input.subdomain, customDomain, creds);
+                        return { url: `https://${customDomain}` };
+                     } catch (domainError) {
+                        console.warn("Failed to add custom domain:", domainError);
+                     }
+                 }
 
-             // Return the custom domain URL if possible, else the pages.dev one
-             // Cloudflare Pages usually provides the alias instantly if DNS is managed by them.
-             return { url: `https://${customDomain}`, subdomain: input.subdomain };
-        } catch (e: any) {
-            console.error("CF Upload Error", e);
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Publishing failed: ${e.message}. Please ask Vibe support.` });
+                 // Default to pages.dev
+                 return { url: result.result?.url || `https://${input.subdomain}.pages.dev` };
+            } catch (e: any) {
+                console.error("CF Upload Error", e);
+                throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Publishing failed: ${e.message}` });
+            }
         }
     }),
   getOne: protectedProcedure
@@ -177,7 +226,6 @@ export const projectsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      // Note: Could be moved + extracted to reusable
       try {
         await consumeCredits();
       } catch (error) {
@@ -188,13 +236,6 @@ export const projectsRouter = createTRPCRouter({
           });
         }
 
-        // rate-limiter-flexible throws a "RateLimiterRes" object (which is not an Error) when rejected.
-        // But if it throws a real Error (like DB error), we should know.
-        // However, checking "instanceof Error" catches DB errors too.
-
-        // We assume that if it is NOT an Error instance, it is a RateLimiterRes, so we are out of credits.
-        // If it IS an Error instance, it's likely a DB error or something else.
-
         if (error instanceof Error) {
           console.error("Credit consumption error:", error);
           throw new TRPCError({
@@ -203,7 +244,6 @@ export const projectsRouter = createTRPCRouter({
           });
         }
 
-        // If it's not an error object, it's the rejection from rate-limiter (out of credits)
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
           message: "You have run out of credits",
@@ -227,7 +267,7 @@ export const projectsRouter = createTRPCRouter({
       });
 
       await inngest.send({
-        name: "code-agent/run", // needs ot match in functions.ts!
+        name: "code-agent/run",
         data: {
           value: input.value,
           projectId: createdProject.id,
