@@ -5,10 +5,9 @@ import {
   createNetwork,
   type Tool,
 } from "@inngest/agent-kit";
-import { Sandbox } from "@e2b/code-interpreter";
 
 import { inngest } from "./client";
-import { getSandbox, lastAssistantTextMessageContent } from "./utils";
+import { lastAssistantTextMessageContent } from "./utils";
 import z from "zod";
 import { PROMPT } from "@/prompt";
 import { prisma } from "@/lib/db";
@@ -22,34 +21,9 @@ export const codeAgentFunction = inngest.createFunction(
   { id: "code-agent" },
   { event: "code-agent/run" },
   async ({ event, step }) => {
-    // 1. Get or Create Sandbox ID
-    // We use a longer timeout.
-    let sandboxId: string = "";
-    try {
-        sandboxId = await step.run("get-sandbox-id", async () => {
-          const sandbox = await Sandbox.create("base", {
-            timeoutMs: 3600_000, // 1 hour
-          });
-          return sandbox.sandboxId;
-        });
-    } catch (e: any) {
-        // If E2B fails to start, we must report this error specifically.
-        console.error("Failed to create sandbox:", e);
-        await step.run("report-sandbox-error", async () => {
-            await prisma.message.create({
-                data: {
-                    projectId: event.data.projectId,
-                    content: `System Error: Failed to initialize coding environment. ${e.message || "Please check system configuration."}`,
-                    role: "ASSISTANT",
-                    type: "ERROR",
-                }
-            });
-        });
-        return; // Exit
-    }
-
-    // 2. Fetch History
-    const history = await step.run("fetch-history", async () => {
+    // 1. Fetch History and Current Files
+    const { history, files: initialFiles } = await step.run("fetch-context", async () => {
+      // Fetch messages history
       const messages = await prisma.message.findMany({
         where: {
             projectId: event.data.projectId
@@ -60,9 +34,33 @@ export const codeAgentFunction = inngest.createFunction(
         take: 20
       });
 
-      return messages.map(m => {
+      const historyStr = messages.map(m => {
           return `${m.role}: ${m.content}`;
       }).join("\n");
+
+      // Fetch latest files state
+      const lastMessageWithFragment = await prisma.message.findFirst({
+        where: {
+            projectId: event.data.projectId,
+            fragment: {
+                isNot: null
+            }
+        },
+        orderBy: {
+            createdAt: 'desc'
+        },
+        include: {
+            fragment: true
+        }
+      });
+
+      let files: { [path: string]: string } = {};
+      if (lastMessageWithFragment?.fragment?.files) {
+        // Safe cast as we expect the files to be a string-string map
+        files = lastMessageWithFragment.fragment.files as { [path: string]: string };
+      }
+
+      return { history: historyStr, files };
     });
 
     const fullPrompt = `
@@ -73,19 +71,7 @@ Current Request:
 ${event.data.value}
 `;
 
-    // 3. Define Tools
-    // Helper to safely run sandbox commands
-    const runSandboxCommand = async (cmd: string) => {
-        try {
-            const sandbox = await getSandbox(sandboxId);
-            const result = await sandbox.commands.run(cmd);
-            return result;
-        } catch (e: any) {
-             console.error(`Sandbox command failed: ${e.message}`);
-             throw e;
-        }
-    };
-
+    // 2. Define Tools
     const codeAgent = createAgent<AgentState>({
       name: "code-agent",
       description: "An expert coding agent",
@@ -101,32 +87,20 @@ ${event.data.value}
       tools: [
         createTool({
           name: "terminal",
-          description: "Use the terminal to run commands",
+          description: "Simulate terminal command execution",
           parameters: z.object({
             command: z.string(),
           }),
           handler: async ({ command }, { step }) => {
             return await step?.run("terminal", async () => {
-              const buffers = { stdout: "", stderr: "" };
-              try {
-                // Use the helper which uses getSandbox wrapper
-                const sandbox = await getSandbox(sandboxId);
-                const result = sandbox.commands.run(command, {
-                   onStdout: (data: string) => { buffers.stdout += data; },
-                   onStderr: (data: string) => { buffers.stderr += data; },
-                });
-                return (await result).stdout;
-              } catch (e) {
-                const msg = `Command failed: ${e} \nstdout: ${buffers.stdout}\nstderror: ${buffers.stderr}`;
-                console.error(msg);
-                return msg;
-              }
+                // Return a simulated success message
+                return `Command "${command}" execution simulated successfully. Environment is updated.`;
             });
           },
         }),
         createTool({
           name: "createOrUpdateFiles",
-          description: "Create or update files in the sandbox",
+          description: "Create or update files in the project",
           parameters: z.object({
             files: z.array(
               z.object({
@@ -142,44 +116,36 @@ ${event.data.value}
             const newFiles = await step?.run(
               "createOrUpdateFiles",
               async () => {
-                try {
-                  const updatedFiles = network.state.data.files || {};
-                  const sandbox = await getSandbox(sandboxId);
+                  const updatedFiles = { ...(network.state.data.files || {}) };
                   for (const file of files) {
-                    await sandbox.files.write(file.path, file.content);
                     updatedFiles[file.path] = file.content;
                   }
                   return updatedFiles;
-                } catch (e) {
-                  return "Error: " + e;
-                }
               },
             );
 
             if (typeof newFiles === "object") {
               network.state.data.files = newFiles;
             }
+
+            return "Files updated successfully.";
           },
         }),
         createTool({
           name: "readFiles",
-          description: "Read files from the sandbox",
+          description: "Read files from the project",
           parameters: z.object({
             files: z.array(z.string()),
           }),
-          handler: async ({ files }, { step }) => {
+          handler: async ({ files }, { step, network }) => {
             return await step?.run("readFiles", async () => {
-              try {
-                const sandbox = await getSandbox(sandboxId);
+                const currentFiles = network.state.data.files || {};
                 const contents = [];
                 for (const file of files) {
-                  const content = await sandbox.files.read(file);
+                  const content = currentFiles[file] || `// File ${file} not found`;
                   contents.push({ path: file, content });
                 }
                 return JSON.stringify(contents);
-              } catch (e) {
-                return "Error: " + e;
-              }
             });
           },
         }),
@@ -204,7 +170,13 @@ ${event.data.value}
       name: "coding-agent-network",
       agents: [codeAgent],
       maxIter: 15,
+      // Removed defaultState to avoid type error
       router: async ({ network }) => {
+        // Initialize state if empty and we have initial files
+        if (!network.state.data.files && Object.keys(initialFiles).length > 0) {
+            network.state.data.files = initialFiles;
+        }
+
         const summary = network.state.data.summary;
         if (summary) {
           return;
@@ -218,32 +190,18 @@ ${event.data.value}
         result = await network.run(fullPrompt);
     } catch (e: any) {
         console.error("Network run failed:", e);
-        // If network run fails (e.g. LLM error, sandbox death), we try to return a graceful failure.
+        // If network run fails (e.g. LLM error), we try to return a graceful failure.
         // We set isError = true manually with the specific error message.
         result = {
             state: {
                 data: {
                     summary: `Internal Error: ${e.message || "Unknown error occurred during execution."}`,
-                    files: {}
+                    files: initialFiles // Preserve existing files on error if possible
                 }
             },
             isFatal: true // Marker for our logic below
         };
     }
-
-    // Attempt to keep server running
-    await step.run("ensure-server-running", async () => {
-        try {
-            const sandbox = await getSandbox(sandboxId);
-            const exists = await sandbox.files.exists("package.json");
-            if (exists) {
-                console.log("Ensuring server is running...");
-                await sandbox.commands.run("npm run dev > /dev/null 2>&1 &");
-            }
-        } catch (e) {
-            console.warn("Failed to ensure server running:", e);
-        }
-    });
 
     // Check for success or error
     // If result was marked fatal, we force error.
@@ -260,18 +218,6 @@ ${event.data.value}
       result.state.data.summary =
         "Code generation completed successfully, but no summary was provided.";
     }
-
-    // Get URL, but fail gracefully if sandbox is dead
-    const sandboxUrl = await step.run("get-sandbox-url", async () => {
-      try {
-          const sandbox = await getSandbox(sandboxId);
-          const host = sandbox.getHost(3000);
-          return `https://${host}`;
-      } catch (e) {
-          console.warn("Could not get sandbox URL (sandbox dead?)", e);
-          return "";
-      }
-    });
 
     // Save to db
     await step.run("save-result", async () => {
@@ -299,7 +245,7 @@ ${event.data.value}
           type: "RESULT",
           fragment: {
             create: {
-              sandboxUrl: sandboxUrl,
+              sandboxUrl: "", // No real sandbox URL in simulated mode
               title: "Fragment",
               files: result.state.data.files,
             },
@@ -309,7 +255,7 @@ ${event.data.value}
     });
 
     return {
-      url: sandboxUrl,
+      url: "",
       title: "Fragment",
       files: result.state.data.files,
       summary: result.state.data.summary,
