@@ -175,7 +175,7 @@ export const codeAgentFunction = inngest.createFunction(
       },
     });
 
-    const result = await network.run(event.data.value);
+    const result = await network.run(event.data.value, { step } as any);
 
     // Fallback: Ensure server is running if the agent didn't start it
     // The "base" sandbox might not have a running process.
