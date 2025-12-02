@@ -11,7 +11,7 @@ interface Props {
 
 export default function Usage({ points, msBeforeNext }: Props) {
   const { has } = useAuth();
-  const hasProAccess = has?.({ permission: "pro" });
+  const hasProAccess = has?.({ plan: "pro" });
 
   return (
     <div className="rounded-t-xl bg-background border border-b-0 p-2.5">

@@ -2,22 +2,14 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 
 const ShimmerMessages = () => {
-  const messages = [
-    "Thinking...",
-    "Now I will make a professional design...",
-    "Editing: index.html...",
-    "Styling with Tailwind CSS...",
-    "Adding interactivity...",
-    "Reviewing the code...",
-    "Finalizing the project...",
-  ];
+  const messages = ["Thinking...", "Loading...", "Generating..."];
 
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentMessageIndex((prev) => (prev + 1) % messages.length);
-    }, 3000);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [messages.length]);

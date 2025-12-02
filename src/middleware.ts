@@ -8,7 +8,6 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/api(.*)", // allow API routes
   "/pricing(.*)",
-  "/admin(.*)", // allow admin page to be accessed without Clerk auth (handled internally)
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

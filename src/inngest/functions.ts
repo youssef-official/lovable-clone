@@ -23,11 +23,7 @@ export const codeAgentFunction = inngest.createFunction(
   { event: "code-agent/run" },
   async ({ event, step }) => {
     const sandboxId = await step.run("get-sandbox-id", async () => {
-      // Using 'base' template which is available to all E2B users by default
-      // If you have a custom template, replace 'base' with your template name
-      const sandbox = await Sandbox.create("base", {
-        timeoutMs: 3600_000,
-      });
+      const sandbox = await Sandbox.create("vibe-nextjs-test-4");
       return sandbox.sandboxId;
     });
 
@@ -40,9 +36,7 @@ export const codeAgentFunction = inngest.createFunction(
       description: "An expert coding agent",
       system: PROMPT,
       model: openai({
-        model: "MiniMax-M2",
-        apiKey: process.env.MINIMAX_API_KEY,
-        baseUrl: "https://api.minimax.io/v1",
+        model: "gpt-4.1",
         defaultParameters: {
           temperature: 0.1, // Randomness (higher = more random)
         },
@@ -177,38 +171,9 @@ export const codeAgentFunction = inngest.createFunction(
 
     const result = await network.run(event.data.value);
 
-    // Fallback: Ensure server is running if the agent didn't start it
-    // The "base" sandbox might not have a running process.
-    // We check if port 3000 is open, if not, we try to start 'npm run dev'
-    // This is a safety net.
-    await step.run("ensure-server-running", async () => {
-        try {
-            const sandbox = await getSandbox(sandboxId);
-            // We can't easily check port status via SDK directly without making a request.
-            // But we can blindly run the start command in background if package.json exists.
-            const exists = await sandbox.files.exists("package.json");
-            if (exists) {
-                console.log("Ensuring server is running...");
-                // Run in background
-                await sandbox.commands.run("npm run dev > /dev/null 2>&1 &");
-            }
-        } catch (e) {
-            console.warn("Failed to ensure server running:", e);
-        }
-    });
-
-    let isError =
+    const isError =
       !result.state.data.summary ||
       Object.keys(result.state.data.files || {}).length === 0;
-
-    if (
-      !result.state.data.summary &&
-      Object.keys(result.state.data.files || {}).length > 0
-    ) {
-      result.state.data.summary =
-        "Code generation completed successfully, but no summary was provided.";
-      isError = false;
-    }
 
     // const { output } = await codeAgent.run(
     //   `Write the following snippet: ${event.data.value}`,

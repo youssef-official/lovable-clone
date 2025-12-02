@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
-import { type LegendPayload } from "recharts/types/component/DefaultLegendContent"
 
 import { cn } from "@/lib/utils"
 
@@ -119,20 +118,11 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
-
 }: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
   React.ComponentProps<"div"> & {
-    payload?: { name: string; value: number; dataKey?: string; payload?: any; color?: string; fill?: string }[]
-  } & {
-    label?: string | number
-    labelFormatter?: (value: string | number, name: string, props: any) => React.ReactNode
-    labelClassName?: string
-    formatter?: (value: string | number, name: string, props: any) => React.ReactNode
-  } & {
     hideLabel?: boolean
     hideIndicator?: boolean
     indicator?: "line" | "dot" | "dashed"
-    color?: string
     nameKey?: string
     labelKey?: string
   }) {
@@ -260,23 +250,17 @@ function ChartTooltipContent({
 
 const ChartLegend = RechartsPrimitive.Legend
 
-interface ChartLegendContentProps extends React.ComponentProps<"div"> {
-  hideIcon?: boolean
-  payload?: LegendPayload[]
-  verticalAlign?: React.ComponentProps<
-    typeof RechartsPrimitive.Legend
-  >["verticalAlign"]
-  nameKey?: string
-}
-
 function ChartLegendContent({
   className,
   hideIcon = false,
   payload,
   verticalAlign = "bottom",
   nameKey,
-  ...props
-}: ChartLegendContentProps) {
+}: React.ComponentProps<"div"> &
+  Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+    hideIcon?: boolean
+    nameKey?: string
+  }) {
   const { config } = useChart()
 
   if (!payload?.length) {

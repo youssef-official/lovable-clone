@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { consumeCredits } from "@/lib/usage";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
 import { TRPCError } from "@trpc/server";
+import { exit } from "node:process";
 import { z } from "zod";
 
 export const messagesRouter = createTRPCRouter({
@@ -57,25 +58,17 @@ export const messagesRouter = createTRPCRouter({
       try {
         await consumeCredits();
       } catch (error) {
-        if (error instanceof Error && error.message === "User not authenticated") {
+        if (error instanceof Error) {
           throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "You must be logged in.",
+            code: "BAD_REQUEST",
+            message: "Something went wrong",
+          });
+        } else {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "You have run out of credits",
           });
         }
-
-        if (error instanceof Error) {
-           console.error("Credit consumption error:", error);
-           throw new TRPCError({
-             code: "INTERNAL_SERVER_ERROR",
-             message: `Credit consumption failed: ${error.message}`,
-           });
-        }
-
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "You have run out of credits",
-        });
       }
 
       const createdMessage = await prisma.message.create({
