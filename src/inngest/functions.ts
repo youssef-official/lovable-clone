@@ -54,8 +54,8 @@ export const codeAgentFunction = inngest.createFunction(
           parameters: z.object({
             command: z.string(),
           }),
-          handler: async ({ command }, { step }) => {
-            return await step?.run("terminal", async () => {
+          handler: async ({ command }) => {
+            return await step.run("terminal", async () => {
               const buffers = { stdout: "", stderr: "" };
 
               try {
@@ -89,35 +89,31 @@ export const codeAgentFunction = inngest.createFunction(
               }),
             ),
           }),
-          handler: async (
-            { files },
-            { step, network }: Tool.Options<AgentState>,
-          ) => {
+          handler: async ({ files }, context: Tool.Options<AgentState>) => {
             /**
              * {
              *   /app.tsx: "<p>hi</p>",
              * }
              */
 
-            const newFiles = await step?.run(
-              "createOrUpdateFiles",
-              async () => {
-                try {
-                  const updatedFiles = network.state.data.files || {};
-                  const sandbox = await getSandbox(sandboxId);
-                  for (const file of files) {
-                    await sandbox.files.write(file.path, file.content);
-                    updatedFiles[file.path] = file.content;
-                  }
+            const network = context?.network;
 
-                  return updatedFiles;
-                } catch (e) {
-                  return "Error: " + e;
+            const newFiles = await step.run("createOrUpdateFiles", async () => {
+              try {
+                const updatedFiles = network?.state?.data?.files || {};
+                const sandbox = await getSandbox(sandboxId);
+                for (const file of files) {
+                  await sandbox.files.write(file.path, file.content);
+                  updatedFiles[file.path] = file.content;
                 }
-              },
-            );
 
-            if (typeof newFiles === "object") {
+                return updatedFiles;
+              } catch (e) {
+                return "Error: " + e;
+              }
+            });
+
+            if (typeof newFiles === "object" && network) {
               network.state.data.files = newFiles;
             }
           },
@@ -128,8 +124,8 @@ export const codeAgentFunction = inngest.createFunction(
           parameters: z.object({
             files: z.array(z.string()),
           }),
-          handler: async ({ files }, { step }) => {
-            return await step?.run("readFiles", async () => {
+          handler: async ({ files }) => {
+            return await step.run("readFiles", async () => {
               try {
                 const sandbox = await getSandbox(sandboxId);
                 const contents = [];
