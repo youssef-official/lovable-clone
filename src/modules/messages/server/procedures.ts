@@ -3,7 +3,6 @@ import { prisma } from "@/lib/db";
 import { consumeCredits } from "@/lib/usage";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
 import { TRPCError } from "@trpc/server";
-import { exit } from "node:process";
 import { z } from "zod";
 
 export const messagesRouter = createTRPCRouter({
