@@ -54,7 +54,7 @@ export const codeAgentFunction = inngest.createFunction(
           parameters: z.object({
             command: z.string(),
           }),
-          handler: async ({ command }, { step }) => {
+          handler: async ({ command }) => {
             return await step?.run("terminal", async () => {
               const buffers = { stdout: "", stderr: "" };
 
@@ -91,8 +91,9 @@ export const codeAgentFunction = inngest.createFunction(
           }),
           handler: async (
             { files },
-            { step, network }: Tool.Options<AgentState>,
+            context: Tool.Options<AgentState>,
           ) => {
+            const network = context?.network;
             /**
              * {
              *   /app.tsx: "<p>hi</p>",
@@ -103,7 +104,7 @@ export const codeAgentFunction = inngest.createFunction(
               "createOrUpdateFiles",
               async () => {
                 try {
-                  const updatedFiles = network.state.data.files || {};
+                  const updatedFiles = network?.state?.data?.files || {};
                   const sandbox = await getSandbox(sandboxId);
                   for (const file of files) {
                     await sandbox.files.write(file.path, file.content);
@@ -117,7 +118,7 @@ export const codeAgentFunction = inngest.createFunction(
               },
             );
 
-            if (typeof newFiles === "object") {
+            if (typeof newFiles === "object" && network) {
               network.state.data.files = newFiles;
             }
           },
@@ -128,7 +129,7 @@ export const codeAgentFunction = inngest.createFunction(
           parameters: z.object({
             files: z.array(z.string()),
           }),
-          handler: async ({ files }, { step }) => {
+          handler: async ({ files }) => {
             return await step?.run("readFiles", async () => {
               try {
                 const sandbox = await getSandbox(sandboxId);
