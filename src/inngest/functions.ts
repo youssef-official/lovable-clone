@@ -23,7 +23,18 @@ export const codeAgentFunction = inngest.createFunction(
   { event: "code-agent/run" },
   async ({ event, step }) => {
     const sandboxId = await step.run("get-sandbox-id", async () => {
-      const sandbox = await Sandbox.create("vibe-nextjs-test-4");
+      let sandbox;
+      const templateId = process.env.E2B_TEMPLATE_ID || "vibe-nextjs-test-4";
+
+      try {
+        sandbox = await Sandbox.create(templateId);
+      } catch (e) {
+        console.warn(
+          `Failed to load custom template "${templateId}". Falling back to base sandbox. Note: This may lack pre-installed dependencies. Error: ${e}`,
+        );
+        sandbox = await Sandbox.create("base");
+      }
+
       return sandbox.sandboxId;
     });
 
