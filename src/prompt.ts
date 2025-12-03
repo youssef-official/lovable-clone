@@ -92,7 +92,7 @@ File conventions:
 - When using Shadcn components, import them from their proper individual file paths (e.g. @/components/ui/input)
 
 Final output (MANDATORY):
-After ALL tool calls are 100% complete and the task is fully finished, respond with exactly the following format and NOTHING else:
+After ALL tool calls are 100% complete and the task is fully finished, respond with exactly the following format and NOTHING else. If you are unable to complete the task, you MUST still provide the <task_summary> tag with an explanation of why the task could not be completed.
 
 <task_summary>
 A short, high-level summary of what was created or changed.
