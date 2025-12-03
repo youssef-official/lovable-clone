@@ -290,9 +290,15 @@ export function cn(...inputs: ClassValue[]) {
 
     const result = await network.run(event.data.value);
 
-    const isError =
-      !result.state.data.summary ||
-      Object.keys(result.state.data.files || {}).length === 0;
+    const hasSummary = !!result.state.data.summary;
+    const hasFiles = Object.keys(result.state.data.files || {}).length > 0;
+    const isError = !hasSummary || !hasFiles;
+
+    if (isError) {
+      console.error(
+        `Agent failed to produce a valid result. Has Summary: ${hasSummary}, Has Files: ${hasFiles}`,
+      );
+    }
 
     // const { output } = await codeAgent.run(
     //   `Write the following snippet: ${event.data.value}`,
@@ -306,6 +312,7 @@ export function cn(...inputs: ClassValue[]) {
 
     // Save to db
     await step.run("save-result", async () => {
+      try {
       if (isError) {
         return await prisma.message.create({
           data: {
@@ -332,6 +339,10 @@ export function cn(...inputs: ClassValue[]) {
           },
         },
       });
+      } catch (e) {
+        console.error("Database save failed:", e);
+        throw e;
+      }
     });
 
     return {
