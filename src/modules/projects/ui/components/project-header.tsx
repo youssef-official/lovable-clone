@@ -2,7 +2,7 @@ import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Suspense, useState } from "react";
 import { MessagesContainer } from "./messages-container";
 import { useTRPC } from "@/trpc/client";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { Fragment } from "@/generated/prisma";
 import {
   DropdownMenu,
@@ -19,9 +19,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import { ChevronDownIcon, ChevronLeftIcon, SunMoonIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  RotateCwIcon,
+  SunMoonIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
+import { toast } from "sonner";
 
 interface Props {
   projectId: string;
@@ -32,8 +38,22 @@ export const ProjectHeader = ({ projectId }: Props) => {
   const { data: project } = useSuspenseQuery(
     trpc.projects.getOne.queryOptions({ id: projectId }),
   );
+  const restoreSandbox = useMutation(
+    trpc.projects.restoreSandbox.mutationOptions(),
+  );
 
   const { setTheme, theme } = useTheme();
+
+  const onRestore = () => {
+    toast.promise(restoreSandbox.mutateAsync({ projectId }), {
+      loading: "Restoring sandbox...",
+      success: () => {
+        window.location.reload();
+        return "Sandbox restored!";
+      },
+      error: "Failed to restore sandbox",
+    });
+  };
 
   return (
     <header className="p-2 flex justify-between items-center border-b">
@@ -50,6 +70,10 @@ export const ProjectHeader = ({ projectId }: Props) => {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="start">
+          <DropdownMenuItem onClick={onRestore}>
+            <RotateCwIcon />
+            <span>Restart Sandbox</span>
+          </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href="/">
               <ChevronLeftIcon />

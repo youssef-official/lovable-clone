@@ -69,12 +69,16 @@ export async function generateProject(input: {
     const templateId = process.env.E2B_TEMPLATE_ID || "vibe-nextjs-test-4";
 
     try {
-      sandbox = await Sandbox.create(templateId);
+      sandbox = await Sandbox.create(templateId, {
+        timeoutMs: 30 * 60 * 1000, // 30 minutes
+      });
     } catch (e) {
       console.warn(
         `Failed to load custom template "${templateId}". Falling back to base sandbox. Note: This may lack pre-installed dependencies. Error: ${e}`
       );
-      sandbox = await Sandbox.create("base");
+      sandbox = await Sandbox.create("base", {
+        timeoutMs: 30 * 60 * 1000, // 30 minutes
+      });
 
       // React + Vite Fallback Skeleton
       const hasPackageJson = await sandbox.files.exists("package.json");
