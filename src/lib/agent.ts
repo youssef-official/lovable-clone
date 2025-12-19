@@ -214,7 +214,7 @@ export function cn(...inputs: ClassValue[]) {
     description: "An expert coding agent",
     system: PROMPT,
     model: openai({
-      model: "moonshotai/kimi-k2:free",
+      model: "qwen/qwen3-coder:free",
       apiKey: process.env.OPENROUTER_API_KEY,
       baseUrl: "https://openrouter.ai/api/v1",
     }),
