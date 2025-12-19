@@ -65,6 +65,25 @@ export const projectsRouter = createTRPCRouter({
         await sandbox.files.write(path, content);
       }
 
+      // Patch vite.config.ts to allow all hosts
+      try {
+        const viteConfigPath = Object.keys(files).find((f) =>
+          f.endsWith("vite.config.ts"),
+        );
+        if (viteConfigPath) {
+          const viteConfig = await sandbox.files.read(viteConfigPath);
+          if (!viteConfig.includes("allowedHosts: true")) {
+            const patchedConfig = viteConfig.replace(
+              "server: {",
+              "server: {\n    allowedHosts: true,",
+            );
+            await sandbox.files.write(viteConfigPath, patchedConfig);
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to patch vite.config.ts:", error);
+      }
+
       // Start dev server
       console.log("Installing dependencies...");
       await sandbox.commands.run("npm install", {
@@ -73,11 +92,6 @@ export const projectsRouter = createTRPCRouter({
 
       console.log("Starting dev server...");
       await sandbox.commands.run("npm run dev > /dev/null 2>&1 &");
-
-      console.log("Ensuring server is running...");
-      await sandbox.commands.run(
-        "if ! curl -s http://localhost:3000 > /dev/null; then npm run dev > /dev/null 2>&1 & fi",
-      );
 
       const host = sandbox.getHost(3000);
       const sandboxUrl = `https://${host}`;
