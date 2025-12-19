@@ -32,6 +32,8 @@ enum MessageRole {
 enum MessageType {
   RESULT
   ERROR
+  LOG
+  THOUGHT
 }
 
 model Message {
