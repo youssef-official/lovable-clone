@@ -153,12 +153,9 @@ export function cn(...inputs: ClassValue[]) {
       description: "An expert coding agent",
       system: PROMPT,
       model: openai({
-        model: "MiniMax-M2",
-        apiKey: process.env.MINIMAX_API_KEY,
-        baseUrl: "https://api.minimax.io/v1",
-        defaultParameters: {
-          temperature: 0.1, // Randomness (higher = more random)
-        },
+        model: "mistralai/devstral-2512:free",
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseUrl: "https://openrouter.ai/api/v1",
       }),
       tools: [
         createTool({
