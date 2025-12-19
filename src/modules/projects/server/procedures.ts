@@ -6,6 +6,7 @@ import { TRPCError } from "@trpc/server";
 import { consumeCredits } from "@/lib/usage";
 import { generateProject } from "@/lib/agent";
 import { Sandbox } from "@e2b/code-interpreter";
+import { getBoilerplateFiles } from "@/lib/sandbox";
 
 export const projectsRouter = createTRPCRouter({
   restoreSandbox: protectedProcedure
@@ -59,8 +60,18 @@ export const projectsRouter = createTRPCRouter({
         });
       }
 
-      // Write files
+      // If the fragment doesn't have package.json, we assume it needs the boilerplate
+      // This handles cases where the project was created before the boilerplate was tracked,
+      // or if the agent somehow deleted it.
       const files = latestFragment.files as Record<string, string>;
+      if (!files["package.json"]) {
+        const boilerplate = getBoilerplateFiles();
+        for (const [path, content] of Object.entries(boilerplate)) {
+          await sandbox.files.write(path, content);
+        }
+      }
+
+      // Write files (overwriting boilerplate if necessary)
       for (const [path, content] of Object.entries(files)) {
         await sandbox.files.write(path, content);
       }

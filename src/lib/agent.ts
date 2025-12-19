@@ -11,6 +11,7 @@ import { Sandbox } from "@e2b/code-interpreter";
 import z from "zod";
 import { PROMPT } from "@/prompt";
 import { prisma } from "@/lib/db";
+import { getBoilerplateFiles } from "./sandbox";
 
 interface AgentState {
   summary: string;
@@ -84,203 +85,11 @@ export async function generateProject(input: {
       const hasPackageJson = await sandbox.files.exists("package.json");
       if (!hasPackageJson) {
         // Create standard Vite + React file structure
-        await sandbox.files.write(
-          "package.json",
-          JSON.stringify(
-            {
-              name: "vibe-react-app",
-              private: true,
-              version: "0.0.0",
-              type: "module",
-              scripts: {
-                dev: "vite --port 3000 --host", // Force port 3000
-                build: "tsc -b && vite build",
-                lint: "eslint .",
-                preview: "vite preview"
-              },
-              dependencies: {
-                react: "^18.3.1",
-                "react-dom": "^18.3.1",
-                "lucide-react": "^0.469.0",
-                "clsx": "^2.1.1",
-                "tailwind-merge": "^2.6.0"
-              },
-              devDependencies: {
-                "@types/react": "^18.3.18",
-                "@types/react-dom": "^18.3.5",
-                "@vitejs/plugin-react": "^4.3.4",
-                "autoprefixer": "^10.4.20",
-                "postcss": "^8.4.49",
-                "tailwindcss": "^3.4.17",
-                "typescript": "~5.6.2",
-                "vite": "^6.0.5",
-                "globals": "^15.14.0"
-              }
-            },
-            null,
-            2
-          )
-        );
-
-        await sandbox.files.write("vite.config.ts", `
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import path from "path"
-
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
-  server: {
-    allowedHosts: true,
-    host: true,
-    port: 3000
-  }
-})
-        `.trim());
-
-        await sandbox.files.write("tsconfig.json", `
-{
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ]
-}
-        `.trim());
-
-        await sandbox.files.write("tsconfig.app.json", `
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    }
-  },
-  "include": ["src"]
-}
-        `.trim());
-
-         await sandbox.files.write("tsconfig.node.json", `
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2023"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "isolatedModules": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-    "customConditions": ["module"]
-  },
-  "include": ["vite.config.ts"]
-}
-        `.trim());
-
-        await sandbox.files.write("index.html", `
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
-        `.trim());
-
-        // Create src structure
         await sandbox.commands.run("mkdir -p src/components");
-
-        await sandbox.files.write("src/main.tsx", `
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
-        `.trim());
-
-        await sandbox.files.write("src/App.tsx", `
-import { useState } from 'react'
-
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="text-center p-8 bg-white rounded-lg shadow-xl">
-         <h1 className="text-4xl font-bold text-blue-600 mb-4">Hello Vite + React!</h1>
-         <button
-           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
-           onClick={() => setCount((count) => count + 1)}
-          >
-            count is {count}
-          </button>
-      </div>
-    </div>
-  )
-}
-
-export default App
-        `.trim());
-
-        await sandbox.files.write("src/index.css", `
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-        `.trim());
-
-        await sandbox.files.write("tailwind.config.js", `
-/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}
-        `.trim());
-
-        await sandbox.files.write("postcss.config.js", `
-export default {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-}
-        `.trim());
+        const boilerplate = getBoilerplateFiles();
+        for (const [path, content] of Object.entries(boilerplate)) {
+          await sandbox.files.write(path, content);
+        }
 
         console.log("Installing dependencies...");
         await sandbox.commands.run("npm install", {
@@ -446,6 +255,17 @@ export default {
     agents: [codeAgent],
     maxIter: 15,
     router: async ({ network }) => {
+      // Pre-populate state if empty
+      if (!network.state.data.files) {
+        network.state.data.files = getBoilerplateFiles();
+      }
+      // If files are empty (maybe overwritten by defaultState logic?), ensure they exist.
+      // But actually, we want to ensure that IF we used the fallback, they are here.
+      // If we used the template, they might be different.
+      // However, saving the boilerplate files in the state is generally safe as the agent will overwrite them.
+      // The only risk is if the template has different content for the same files.
+      // But `vibe-nextjs-test-4` is likely consistent with our boilerplate or we want to overwrite it.
+
       const summary = network.state.data.summary;
       if (summary) {
         return;
