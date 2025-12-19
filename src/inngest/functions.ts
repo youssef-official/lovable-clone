@@ -138,6 +138,14 @@ export function cn(...inputs: ClassValue[]) {
 @tailwind components;
 @tailwind utilities;
           `.trim());
+
+          console.log("Installing dependencies...");
+          await sandbox.commands.run("npm install", {
+            timeoutMs: 300000, // 5 minutes
+          });
+
+          console.log("Starting dev server...");
+          await sandbox.commands.run("npm run dev > /dev/null 2>&1 &");
         }
       }
 
