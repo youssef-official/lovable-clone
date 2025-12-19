@@ -1,4 +1,4 @@
-import { inngest } from "@/inngest/client";
+import { generateProject } from "@/lib/agent";
 import { prisma } from "@/lib/db";
 import { consumeCredits } from "@/lib/usage";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
@@ -79,12 +79,12 @@ export const messagesRouter = createTRPCRouter({
         },
       });
 
-      await inngest.send({
-        name: "code-agent/run", // needs to match in functions.ts!
-        data: {
-          value: input.value,
-          projectId: input.projectId,
-        },
+      // Execute the agent directly
+      generateProject({
+        value: input.value,
+        projectId: input.projectId,
+      }).catch((e) => {
+        console.error("Failed to generate project (message):", e);
       });
 
       return createdMessage;
