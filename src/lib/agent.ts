@@ -440,7 +440,7 @@ export default {
     name: "coding-agent-network",
     agents: [codeAgent],
     maxIter: 15,
-    history: history, // Inject history
+    defaultHandler: codeAgent, // Ensure there's a default handler if router returns undefined
     router: async ({ network }) => {
       const summary = network.state.data.summary;
       if (summary) {
@@ -450,16 +450,40 @@ export default {
     },
   });
 
-  const result = await network.run(input.value);
+  // Manually prepend history to the input since createNetwork doesn't support it directly
+  let fullPrompt = input.value;
+  if (history.length > 0) {
+    const historyText = history.map(h => `${h.role.toUpperCase()}: ${h.content}`).join("\n");
+    fullPrompt = `Previous conversation history:\n${historyText}\n\nCurrent Request:\n${input.value}`;
+  }
+
+  const result = await network.run(fullPrompt);
 
   const hasSummary = !!result.state.data.summary;
   const hasFiles = Object.keys(result.state.data.files || {}).length > 0;
-  const isError = !hasSummary || !hasFiles;
+  let isError = !hasSummary || !hasFiles;
 
   if (isError) {
     console.error(
-      `Agent failed to produce a valid result. Has Summary: ${hasSummary}, Has Files: ${hasFiles}`
+      `Agent failed to produce a valid result. Has Summary: ${hasSummary}, Has Files: ${hasFiles}. Retrying with error feedback...`
     );
+
+    // Auto-correction retry
+    const retryPrompt = `The previous attempt failed to generate a valid result (Summary: ${hasSummary}, Files: ${hasFiles}). Please ensure you generate files using createOrUpdateFiles and provide a <task_summary>. Try again.`;
+    const retryResult = await network.run(retryPrompt);
+
+    // Update result with retry data
+    if (retryResult.state.data.summary) {
+        result.state.data.summary = retryResult.state.data.summary;
+    }
+    if (retryResult.state.data.files && Object.keys(retryResult.state.data.files).length > 0) {
+        result.state.data.files = retryResult.state.data.files;
+    }
+
+    // Re-evaluate error state
+    const retryHasSummary = !!result.state.data.summary;
+    const retryHasFiles = Object.keys(result.state.data.files || {}).length > 0;
+    isError = !retryHasSummary || !retryHasFiles;
   }
 
   const sandboxUrl = await (async () => {
