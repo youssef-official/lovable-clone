@@ -440,7 +440,6 @@ export default {
     name: "coding-agent-network",
     agents: [codeAgent],
     maxIter: 15,
-    defaultHandler: codeAgent, // Ensure there's a default handler if router returns undefined
     router: async ({ network }) => {
       const summary = network.state.data.summary;
       if (summary) {
