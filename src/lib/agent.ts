@@ -200,6 +200,12 @@ export function cn(...inputs: ClassValue[]) {
       }
     }
 
+    // Ensure the server is running on port 3000
+    // We check if port 3000 is open. If not, we start the server.
+    // This covers cases where the custom template failed to start the server or it crashed.
+    console.log("Ensuring server is running...");
+    await sandbox.commands.run("if ! curl -s http://localhost:3000 > /dev/null; then npm run dev > /dev/null 2>&1 & fi");
+
     return sandbox.sandboxId;
   })();
 
@@ -208,7 +214,7 @@ export function cn(...inputs: ClassValue[]) {
     description: "An expert coding agent",
     system: PROMPT,
     model: openai({
-      model: "mistralai/devstral-2512:free",
+      model: "moonshotai/kimi-k2:free",
       apiKey: process.env.OPENROUTER_API_KEY,
       baseUrl: "https://openrouter.ai/api/v1",
     }),
