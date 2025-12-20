@@ -1,8 +1,8 @@
 import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { MessagesContainer } from "./messages-container";
 import { useTRPC } from "@/trpc/client";
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { Fragment } from "@/generated/prisma";
 import {
   DropdownMenu,
@@ -57,6 +57,7 @@ export const ProjectHeader = ({ projectId }: Props) => {
 
   return (
     <header className="p-2 flex justify-between items-center border-b">
+      <div className="flex items-center gap-2">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -104,6 +105,11 @@ export const ProjectHeader = ({ projectId }: Props) => {
           </DropdownMenuSub>
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {/* Removed PublishDialog, UserCredits, UserButton */}
+      </div>
     </header>
   );
 };
