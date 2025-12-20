@@ -1,3 +1,4 @@
+import { Sandbox } from "@e2b/code-interpreter";
 
 export function getBoilerplateFiles() {
   return {
@@ -214,4 +215,76 @@ export default {
 }
 `.trim(),
   };
+}
+
+export async function initializeSandbox(
+  sandbox: Sandbox,
+  files?: Record<string, string>
+) {
+  let finalFiles: Record<string, string> | undefined = files;
+
+  // Normalize file paths to remove leading ./ if files are provided
+  if (files) {
+    finalFiles = {};
+    for (const [path, content] of Object.entries(files)) {
+      const normalizedPath = path.startsWith("./") ? path.slice(2) : path;
+      finalFiles[normalizedPath] = content;
+    }
+  }
+
+  // If files are provided (restoring/updating project)
+  if (finalFiles) {
+    // If the fragment doesn't have package.json, we assume it needs the boilerplate
+    if (!finalFiles["package.json"]) {
+      const boilerplate = getBoilerplateFiles();
+      for (const [path, content] of Object.entries(boilerplate)) {
+        await sandbox.files.write(path, content);
+      }
+    }
+
+    // Write provided files (overwriting boilerplate if necessary)
+    for (const [path, content] of Object.entries(finalFiles)) {
+      await sandbox.files.write(path, content);
+    }
+
+    // Patch vite.config.ts to allow all hosts
+    try {
+      const viteConfigPath = Object.keys(finalFiles).find((f) =>
+        f.endsWith("vite.config.ts")
+      );
+      if (viteConfigPath) {
+        const viteConfig = await sandbox.files.read(viteConfigPath);
+        if (!viteConfig.includes("allowedHosts: true")) {
+          const patchedConfig = viteConfig.replace(
+            "server: {",
+            "server: {\\n    allowedHosts: true,"
+          );
+          await sandbox.files.write(viteConfigPath, patchedConfig);
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to patch vite.config.ts:", error);
+    }
+  } else {
+    // New project: Check if package.json exists (in case template provided it)
+    const hasPackageJson = await sandbox.files.exists("package.json");
+    if (!hasPackageJson) {
+      // Create standard Vite + React file structure
+      await sandbox.commands.run("mkdir -p src/components");
+      const boilerplate = getBoilerplateFiles();
+      for (const [path, content] of Object.entries(boilerplate)) {
+        await sandbox.files.write(path, content);
+      }
+    }
+  }
+
+  console.log("Installing dependencies...");
+  await sandbox.commands.run("npm install", {
+    timeoutMs: 300000, // 5 minutes
+  });
+
+  console.log("Starting dev server...");
+  await sandbox.commands.run(
+    "npm run dev > /home/user/npm_output.log 2>&1 &"
+  );
 }

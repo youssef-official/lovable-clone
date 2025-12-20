@@ -11,7 +11,7 @@ import { Sandbox } from "@e2b/code-interpreter";
 import z from "zod";
 import { PROMPT } from "@/prompt";
 import { prisma } from "@/lib/db";
-import { getBoilerplateFiles } from "./sandbox";
+import { getBoilerplateFiles, initializeSandbox } from "./sandbox";
 
 interface AgentState {
   summary: string;
@@ -86,27 +86,10 @@ export async function generateProject(input: {
       sandbox = await Sandbox.create("base", {
         timeoutMs: 30 * 60 * 1000, // 30 minutes
       });
-
-      // React + Vite Fallback Skeleton
-      const hasPackageJson = await sandbox.files.exists("package.json");
-      if (!hasPackageJson) {
-        // Create standard Vite + React file structure
-        await sandbox.commands.run("mkdir -p src/components");
-        const boilerplate = getBoilerplateFiles();
-        for (const [path, content] of Object.entries(boilerplate)) {
-          await sandbox.files.write(path, content);
-        }
-
-        console.log("Installing dependencies...");
-        await sandbox.commands.run("npm install", {
-          timeoutMs: 300000, // 5 minutes
-        });
-
-        console.log("Starting dev server...");
-        // Vite uses 5173 by default, but we configured it to 3000 in package.json
-        await sandbox.commands.run("npm run dev > /home/user/npm_output.log 2>&1 &");
-      }
     }
+
+    // Initialize sandbox (restore files if existing, or boilerplate if new)
+    await initializeSandbox(sandbox, latestFragment?.files as Record<string, string> | undefined);
 
     // Ensure the server is running on port 3000
     console.log("Ensuring server is running...");
