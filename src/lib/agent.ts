@@ -60,6 +60,20 @@ export async function generateProject(input: {
     take: 10, // Limit context window
   });
 
+  // Load latest file state
+  const latestFragment = await prisma.fragment.findFirst({
+    where: {
+      message: {
+        projectId: input.projectId,
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  const initialFiles = latestFragment?.files as Record<string, string> | undefined;
+
   const history = previousMessages.reverse().map((msg) => ({
     role: msg.role.toLowerCase() as "user" | "assistant",
     content: msg.content,
@@ -114,9 +128,11 @@ export async function generateProject(input: {
     description: "An expert coding agent",
     system: PROMPT,
     model: openai({
-      model: "mistralai/devstral-2512:free",
-      apiKey: process.env.OPENROUTER_API_KEY,
-      baseUrl: "https://openrouter.ai/api/v1",
+      model: "MiniMax-M2",
+      apiKey: process.env.MINIMAX_API_KEY || process.env.OPENROUTER_API_KEY,
+      baseUrl: process.env.MINIMAX_API_KEY
+        ? "https://api.minimax.io/v1"
+        : "https://openrouter.ai/api/v1",
     }),
     tools: [
       createTool({
@@ -254,9 +270,16 @@ export async function generateProject(input: {
     name: "coding-agent-network",
     agents: [codeAgent],
     maxIter: 15,
+    defaultState: {
+      summary: "",
+      files: initialFiles || {},
+    },
     router: async ({ network }) => {
       // Pre-populate state if empty
-      if (!network.state.data.files) {
+      if (
+        !network.state.data.files ||
+        Object.keys(network.state.data.files).length === 0
+      ) {
         network.state.data.files = getBoilerplateFiles();
       }
       // If files are empty (maybe overwritten by defaultState logic?), ensure they exist.
