@@ -44,11 +44,24 @@ export async function generateProject(input: {
   projectId: string;
 }) {
   try {
+    const apiKey = process.env.MINIMAX_API_KEY;
+    if (!apiKey) {
+        await prisma.message.create({
+            data: {
+                projectId: input.projectId,
+                content: "Critical Error: MINIMAX_API_KEY is missing from environment variables.",
+                role: "ASSISTANT",
+                type: "ERROR",
+            }
+        });
+        throw new Error("MINIMAX_API_KEY is missing");
+    }
+
     // Log start
     await prisma.message.create({
       data: {
         projectId: input.projectId,
-        content: "Starting agent execution...",
+        content: `Starting agent execution... (Key prefix: ${apiKey.substring(0, 8)}...)`,
         role: "ASSISTANT",
         type: "LOG",
       },
