@@ -2,8 +2,17 @@ import { Card } from "@/components/ui/card";
 import { Fragment, MessageRole, MessageType } from "@/generated/prisma";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { ChevronRightIcon, Code2Icon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  Code2Icon,
+  EyeIcon,
+  PencilIcon,
+  SearchIcon,
+  TerminalIcon,
+} from "lucide-react";
 import Image from "next/image";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface UserMessageProps {
   content: string;
@@ -53,6 +62,35 @@ const FragmentCard = ({
   );
 };
 
+interface LogMessageProps {
+  content: string;
+}
+
+const LogMessage = ({ content }: LogMessageProps) => {
+  let icon = <Code2Icon className="size-3.5" />;
+  let text = content;
+
+  if (content.startsWith("Reading")) {
+    icon = <EyeIcon className="size-3.5" />;
+    text = content; // Keep "Reading X" or simplify
+  } else if (content.startsWith("src/") || content.includes("/")) {
+    icon = <PencilIcon className="size-3.5" />;
+    text = `Edited ${content}`;
+  } else if (content.startsWith("npm") || content.startsWith("Command")) {
+    icon = <TerminalIcon className="size-3.5" />;
+    // text = content; // Keep full command
+  } else if (content.toLowerCase().includes("search")) {
+    icon = <SearchIcon className="size-3.5" />;
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50 w-fit text-xs text-muted-foreground my-1">
+      {icon}
+      <span className="font-mono truncate max-w-[300px]">{text}</span>
+    </div>
+  );
+};
+
 interface AssistantMessageProps {
   content: string;
   fragment: Fragment | null;
@@ -70,6 +108,14 @@ const AssistantMessage = ({
   onFragmentClick,
   type,
 }: AssistantMessageProps) => {
+  if (type === "LOG") {
+    return (
+      <div className="pl-10 pb-2">
+        <LogMessage content={content} />
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -91,7 +137,9 @@ const AssistantMessage = ({
         </span>
       </div>
       <div className="pl-8.5 flex flex-col gap-y-4">
-        <span>{content}</span>
+        <div className="prose prose-sm dark:prose-invert max-w-none break-words">
+           <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        </div>
         {fragment && type === "RESULT" && (
           <FragmentCard
             fragment={fragment}
