@@ -7,6 +7,9 @@ import { consumeCredits } from "@/lib/usage";
 import { generateProject } from "@/lib/agent";
 import { Sandbox } from "@e2b/code-interpreter";
 import { initializeSandbox } from "@/lib/sandbox";
+import { deployToVercel, getDeploymentStatus } from "@/lib/vercel";
+import { createGitHubRepo, pushToGitHub } from "@/lib/github";
+import { after } from "next/server";
 
 export const projectsRouter = createTRPCRouter({
   restoreSandbox: protectedProcedure
@@ -151,13 +154,188 @@ export const projectsRouter = createTRPCRouter({
 
       // Execute the agent directly
       // Note: This will take some time to complete
-      generateProject({
-        value: input.value,
-        projectId: createdProject.id,
-      }).catch((e) => {
-        console.error("Failed to generate project:", e);
+      after(() => {
+        generateProject({
+          value: input.value,
+          projectId: createdProject.id,
+        }).catch((e) => {
+          console.error("Failed to generate project:", e);
+        });
       });
 
       return createdProject;
     }),
+
+  // Deployment Procedures
+  deployToVercel: protectedProcedure
+    .input(
+      z.object({
+        projectId: z.string(),
+        token: z.string().optional(), // If provided, uses this instead of env
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const project = await prisma.project.findUnique({
+        where: { id: input.projectId, userId: ctx.auth.userId },
+      });
+
+      if (!project) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Get latest files
+      const latestFragment = await prisma.fragment.findFirst({
+        where: { message: { projectId: input.projectId } },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (!latestFragment) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No code to deploy" });
+      }
+
+      const token = input.token || process.env.VERCEL_TOKEN;
+      if (!token) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No Vercel token available" });
+      }
+
+      // Save token if it's a custom user token (only if provided in input)
+      if (input.token) {
+        await prisma.project.update({
+          where: { id: input.projectId },
+          data: { vercelToken: input.token },
+        });
+      }
+
+      await prisma.project.update({
+        where: { id: input.projectId },
+        data: { lastDeploymentStatus: "starting" },
+      });
+
+      try {
+        const deployment = await deployToVercel({
+          token,
+          projectName: project.name, // or custom name?
+          files: latestFragment.files as Record<string, string>,
+        });
+
+        await prisma.project.update({
+            where: { id: input.projectId },
+            data: {
+                deploymentUrl: `https://${deployment.url}`,
+                lastDeploymentStatus: "building"
+            },
+        });
+
+        return deployment;
+      } catch (error: any) {
+        await prisma.project.update({
+            where: { id: input.projectId },
+            data: { lastDeploymentStatus: "error" },
+        });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      }
+    }),
+
+  checkVercelStatus: protectedProcedure
+    .input(z.object({ projectId: z.string(), deploymentId: z.string() }))
+    .query(async ({ input, ctx }) => {
+        const project = await prisma.project.findUnique({
+            where: { id: input.projectId, userId: ctx.auth.userId },
+        });
+        if (!project) throw new TRPCError({ code: "NOT_FOUND" });
+
+        // Decide which token to use
+        const token = project.vercelToken || process.env.VERCEL_TOKEN;
+         if (!token) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "No Vercel token available" });
+        }
+
+        try {
+            const status = await getDeploymentStatus(token, input.deploymentId);
+
+            // Map Vercel status to our simple status
+            let dbStatus = "building";
+            if (status.status === "READY") dbStatus = "success";
+            if (status.status === "ERROR" || status.status === "CANCELED") dbStatus = "error";
+
+            await prisma.project.update({
+                where: { id: input.projectId },
+                data: { lastDeploymentStatus: dbStatus },
+            });
+
+            return status;
+        } catch (e) {
+            return { status: "UNKNOWN" };
+        }
+    }),
+
+    getGithubConnection: protectedProcedure.query(async ({ ctx }) => {
+        const connection = await prisma.userIntegration.findUnique({
+            where: {
+                userId_provider: {
+                    userId: ctx.auth.userId,
+                    provider: "github"
+                }
+            }
+        });
+        return connection ? { username: connection.username } : null;
+    }),
+
+    syncToGithub: protectedProcedure
+      .input(z.object({ projectId: z.string(), repoName: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+         const project = await prisma.project.findUnique({
+             where: { id: input.projectId, userId: ctx.auth.userId }
+         });
+         if (!project) throw new TRPCError({ code: "NOT_FOUND" });
+
+         const integration = await prisma.userIntegration.findUnique({
+             where: {
+                 userId_provider: {
+                     userId: ctx.auth.userId,
+                     provider: "github"
+                 }
+             }
+         });
+
+         if (!integration) {
+             throw new TRPCError({ code: "BAD_REQUEST", message: "GitHub not connected" });
+         }
+
+         const latestFragment = await prisma.fragment.findFirst({
+            where: { message: { projectId: input.projectId } },
+            orderBy: { createdAt: "desc" },
+          });
+
+          if (!latestFragment) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "No code to sync" });
+          }
+
+          try {
+              // 1. Ensure Repo Exists
+              await createGitHubRepo(integration.accessToken, input.repoName);
+
+              // 2. Push Code
+              const result = await pushToGitHub(
+                  integration.accessToken,
+                  integration.username!, // Assuming username exists if integration exists
+                  input.repoName,
+                  latestFragment.files as Record<string, string>,
+                  "Initial commit from Vibe"
+              );
+
+              // 3. Save Repo Name
+              await prisma.project.update({
+                  where: { id: input.projectId },
+                  data: { githubRepo: input.repoName }
+              });
+
+              return { url: `https://github.com/${integration.username}/${input.repoName}` };
+
+          } catch (error: any) {
+              console.error("GitHub Sync Error", error);
+              throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: error.message || "Failed to sync to GitHub"
+              });
+          }
+      })
 });

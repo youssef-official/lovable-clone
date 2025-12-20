@@ -22,6 +22,12 @@ model Project {
   updatedAt DateTime @updatedAt
 
   messages Message[]
+
+  // Deployment fields
+  githubRepo String?
+  deploymentUrl String?
+  lastDeploymentStatus String? // "starting", "building", "success", "error"
+  vercelToken String? // Optional custom token
 }
 
 enum MessageRole {
@@ -67,4 +73,17 @@ model Usage {
   key String @id
   points Int
   expire DateTime?
+}
+
+model UserIntegration {
+  id String @id @default(uuid())
+  userId String
+  provider String // "github"
+  accessToken String
+  refreshToken String? // For providers that support it
+  username String? // To show "Connected as X"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
 }
