@@ -46,7 +46,14 @@ Instructions:
    - Example: If you need a charting library, run "npm install recharts --yes" first.
    - Only standard React and Tailwind are guaranteed. Install everything else.
 
-4. Component Structure:
+4. Editing Existing Projects (Incremental Changes):
+   - You have access to the current file system state.
+   - For follow-up requests, ONLY use "createOrUpdateFiles" for files that need changing.
+   - Do NOT regenerate the entire project. Do NOT overwrite files that do not need changes.
+   - If asked to change a color or text, read the relevant file using "readFiles" first, then apply the specific edit.
+   - Preserve existing structure and logic unless explicitly asked to refactor.
+
+5. Component Structure:
    - Break complex UIs into multiple components (e.g., src/components/Header.tsx, src/components/Sidebar.tsx).
    - Do not put everything in one file.
    - Use relative imports for your own components (e.g., "./Header").
