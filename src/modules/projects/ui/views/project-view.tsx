@@ -19,7 +19,7 @@ import { UserControl } from "@/components/user-control";
 import { auth } from "@clerk/nextjs/server";
 import { useAuth } from "@clerk/nextjs";
 import { PublishDialog } from "../components/publish-dialog";
-import { UserCredits } from "@/modules/home/ui/components/user-credits";
+import { DownloadZipButton } from "../components/download-zip";
 
 interface Props {
   projectId: string;
@@ -76,8 +76,11 @@ export const ProjectView = ({ projectId }: Props) => {
                     </Link>
                   </Button>
                 )}
+                <DownloadZipButton
+                  files={activeFragment?.files as Record<string, string> || {}}
+                  name={activeFragment?.id || "project"}
+                />
                 <PublishDialog projectId={projectId} />
-                <UserCredits />
                 <UserControl />
               </div>
             </div>

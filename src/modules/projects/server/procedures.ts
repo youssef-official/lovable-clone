@@ -317,7 +317,19 @@ export const projectsRouter = createTRPCRouter({
 
           try {
               // 1. Ensure Repo Exists
-              await createGitHubRepo(integration.accessToken, input.repoName);
+              try {
+                  await createGitHubRepo(integration.accessToken, input.repoName);
+              } catch (e: any) {
+                  // If 422, it likely exists, so we proceed.
+                  // If 403 or 401, we should probably stop but let's see if we can push anyway?
+                  // No, if we can't create, we might not be able to push if it's not ours.
+                  // But createGitHubRepo in lib/github.ts already tries to get it if it exists (on 422).
+                  // So if it throws here, it's a real error.
+                  console.warn("GitHub Repo creation failed or already exists:", e.message);
+                  if (e.status !== 422) {
+                      throw e; // Rethrow if it's not "already exists" (which we might handle inside lib)
+                  }
+              }
 
               // 2. Push Code
               const result = await pushToGitHub(

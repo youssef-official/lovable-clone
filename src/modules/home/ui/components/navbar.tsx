@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
+import { UserCredits } from "./user-credits";
 
 export const Navbar = () => {
   const isScrolled = useScroll();
@@ -36,7 +37,10 @@ export const Navbar = () => {
           </div>
         </SignedOut>
         <SignedIn>
-          <UserControl showName />
+          <div className="flex items-center gap-2">
+            <UserCredits />
+            <UserControl showName />
+          </div>
         </SignedIn>
       </div>
     </nav>
