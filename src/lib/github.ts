@@ -32,6 +32,7 @@ export async function pushToGitHub(
   files: Record<string, string>,
   message: string
 ) {
+  if (Object.keys(files).length === 0) throw new Error("No files to push");
   const octokit = new Octokit({ auth: token });
 
   // 1. Get the current commit SHA of the default branch

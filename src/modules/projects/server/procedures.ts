@@ -191,6 +191,10 @@ export const projectsRouter = createTRPCRouter({
         throw new TRPCError({ code: "BAD_REQUEST", message: "No code to deploy" });
       }
 
+      if (!latestFragment.files || Object.keys(latestFragment.files as object).length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No files to deploy" });
+      }
+
       const token = input.token || process.env.VERCEL_TOKEN;
       if (!token) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "No Vercel token available" });
@@ -308,6 +312,8 @@ export const projectsRouter = createTRPCRouter({
           if (!latestFragment) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "No code to sync" });
           }
+
+          console.log("Syncing to GitHub:", { repoName: input.repoName, fileCount: Object.keys(latestFragment.files || {}).length });
 
           try {
               // 1. Ensure Repo Exists

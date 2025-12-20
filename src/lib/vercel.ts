@@ -21,6 +21,9 @@ export async function deployToVercel({
     data: content,
   }));
 
+  // Log payload for debugging
+  console.log("Vercel Payload:", JSON.stringify({ name: projectName, files: vercelFiles.map(f => f.file) }, null, 2));
+
   // Create the deployment
   const response = await fetch(`${VERCEL_API_URL}/v13/deployments`, {
     method: "POST",
@@ -39,8 +42,13 @@ export async function deployToVercel({
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || "Failed to deploy to Vercel");
+    try {
+      const error = await response.json();
+      throw new Error(error.error?.message || "Failed to deploy to Vercel");
+    } catch (e) {
+        if (e instanceof Error && e.message !== "Failed to deploy to Vercel") throw e;
+        throw new Error(`Vercel deployment failed with status ${response.status}: ${response.statusText}`);
+    }
   }
 
   const data = await response.json();
