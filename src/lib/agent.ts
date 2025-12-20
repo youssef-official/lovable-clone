@@ -276,9 +276,17 @@ export async function generateProject(input: {
 
   // Manually prepend history to the input since createNetwork doesn't support it directly
   let fullPrompt = input.value;
+
+  // Add file context so the agent knows what exists
+  const existingFiles = (latestFragment?.files as Record<string, string>) || getBoilerplateFiles();
+  const fileList = Object.keys(existingFiles).join("\n");
+  const fileContext = `Current File System State:\n${fileList}\n\n`;
+
   if (history.length > 0) {
     const historyText = history.map(h => `${h.role.toUpperCase()}: ${h.content}`).join("\n");
-    fullPrompt = `Previous conversation history:\n${historyText}\n\nCurrent Request:\n${input.value}`;
+    fullPrompt = `${fileContext}Previous conversation history:\n${historyText}\n\nCurrent Request:\n${input.value}`;
+  } else {
+    fullPrompt = `${fileContext}Current Request:\n${input.value}`;
   }
 
   const result = await network.run(fullPrompt);
@@ -330,7 +338,7 @@ export async function generateProject(input: {
             }
         });
 
-        const repairPrompt = `The application failed to start (health check failed). Here are the logs from npm run dev:\n\n${logContent}\n\nPlease analyze these logs and fix the application code (e.g., syntax errors, missing dependencies, build failures).`;
+        const repairPrompt = `The application failed to start (health check failed). Here are the logs from npm run dev (sandbox e2b iframe log):\n\n${logContent}\n\nPlease analyze these logs and fix the application code (e.g., syntax errors, missing dependencies, build failures).`;
         const repairResult = await network.run(repairPrompt);
 
         // Update result if repair generated new output
