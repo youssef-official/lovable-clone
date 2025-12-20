@@ -268,19 +268,17 @@ export async function generateProject(input: {
     name: "coding-agent-network",
     agents: [codeAgent],
     maxIter: 15,
-    defaultState: {
-      data: {
-        summary: "",
-        files: initialFiles || {},
-      },
-    },
     router: async ({ network }) => {
       // Pre-populate state if empty
       if (
         !network.state.data.files ||
         Object.keys(network.state.data.files).length === 0
       ) {
-        network.state.data.files = getBoilerplateFiles();
+        if (initialFiles) {
+          network.state.data.files = initialFiles;
+        } else {
+          network.state.data.files = getBoilerplateFiles();
+        }
       }
       // If files are empty (maybe overwritten by defaultState logic?), ensure they exist.
       // But actually, we want to ensure that IF we used the fallback, they are here.
