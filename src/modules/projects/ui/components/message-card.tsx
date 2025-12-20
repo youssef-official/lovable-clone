@@ -2,8 +2,16 @@ import { Card } from "@/components/ui/card";
 import { Fragment, MessageRole, MessageType } from "@/generated/prisma";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { ChevronRightIcon, Code2Icon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  Code2Icon,
+  EyeIcon,
+  PencilIcon,
+  TerminalIcon,
+} from "lucide-react";
 import Image from "next/image";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface UserMessageProps {
   content: string;
@@ -53,6 +61,41 @@ const FragmentCard = ({
   );
 };
 
+const LogMessage = ({ content }: { content: string }) => {
+  if (content.startsWith("Reading")) {
+    const files = content.replace("Reading ", "");
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <EyeIcon className="size-4 shrink-0" />
+        <span>Reading {files}</span>
+      </div>
+    );
+  }
+
+  // Heuristic: If it has spaces (and not Reading...), it's likely a command (e.g. "npm install ...")
+  // If it has no spaces, it's likely a file path (e.g. "src/App.tsx")
+  const isCommand = content.includes(" ");
+
+  if (isCommand) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <TerminalIcon className="size-4 shrink-0" />
+        <span className="font-mono">{content}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <PencilIcon className="size-4 shrink-0" />
+      <div className="flex items-center gap-1">
+        <span>Editing</span>
+        <span className="font-mono bg-muted px-1 rounded">{content}</span>
+      </div>
+    </div>
+  );
+};
+
 interface AssistantMessageProps {
   content: string;
   fragment: Fragment | null;
@@ -91,7 +134,13 @@ const AssistantMessage = ({
         </span>
       </div>
       <div className="pl-8.5 flex flex-col gap-y-4">
-        <span>{content}</span>
+        {type === "LOG" ? (
+          <LogMessage content={content} />
+        ) : (
+          <div className="prose dark:prose-invert max-w-none prose-sm">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
+        )}
         {fragment && type === "RESULT" && (
           <FragmentCard
             fragment={fragment}

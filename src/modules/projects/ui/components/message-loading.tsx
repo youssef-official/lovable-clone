@@ -1,23 +1,23 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { Loader2Icon } from "lucide-react";
 
 const ShimmerMessages = () => {
-  const messages = ["Thinking...", "Loading...", "Generating..."];
-
-  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentMessageIndex((prev) => (prev + 1) % messages.length);
-    }, 2000);
+    const timer = setInterval(() => {
+      setSeconds((prev) => prev + 1);
+    }, 1000);
 
-    return () => clearInterval(interval);
-  }, [messages.length]);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <div className="flex items-center gap-2">
+      <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
       <span className="text-base text-muted-foreground animate-pulse">
-        {messages[currentMessageIndex]}
+        Thinking for {seconds}s...
       </span>
     </div>
   );
