@@ -129,10 +129,8 @@ export async function generateProject(input: {
     system: PROMPT,
     model: openai({
       model: "MiniMax-M2",
-      apiKey: process.env.MINIMAX_API_KEY || process.env.OPENROUTER_API_KEY,
-      baseUrl: process.env.MINIMAX_API_KEY
-        ? "https://api.minimax.io/v1"
-        : "https://openrouter.ai/api/v1",
+      apiKey: process.env.MINIMAX_API_KEY,
+      baseUrl: "https://api.minimax.io/v1",
     }),
     tools: [
       createTool({
@@ -271,8 +269,10 @@ export async function generateProject(input: {
     agents: [codeAgent],
     maxIter: 15,
     defaultState: {
-      summary: "",
-      files: initialFiles || {},
+      data: {
+        summary: "",
+        files: initialFiles || {},
+      },
     },
     router: async ({ network }) => {
       // Pre-populate state if empty
