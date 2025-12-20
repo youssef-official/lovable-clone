@@ -4,6 +4,7 @@ import { consumeCredits } from "@/lib/usage";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { after } from "next/server";
 
 export const messagesRouter = createTRPCRouter({
   getMany: protectedProcedure
@@ -80,11 +81,13 @@ export const messagesRouter = createTRPCRouter({
       });
 
       // Execute the agent directly
-      generateProject({
-        value: input.value,
-        projectId: input.projectId,
-      }).catch((e) => {
-        console.error("Failed to generate project (message):", e);
+      after(() => {
+        generateProject({
+          value: input.value,
+          projectId: input.projectId,
+        }).catch((e) => {
+          console.error("Failed to generate project (message):", e);
+        });
       });
 
       return createdMessage;

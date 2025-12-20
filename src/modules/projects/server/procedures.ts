@@ -7,6 +7,7 @@ import { consumeCredits } from "@/lib/usage";
 import { generateProject } from "@/lib/agent";
 import { Sandbox } from "@e2b/code-interpreter";
 import { getBoilerplateFiles } from "@/lib/sandbox";
+import { after } from "next/server";
 
 export const projectsRouter = createTRPCRouter({
   restoreSandbox: protectedProcedure
@@ -192,11 +193,13 @@ export const projectsRouter = createTRPCRouter({
 
       // Execute the agent directly
       // Note: This will take some time to complete
-      generateProject({
-        value: input.value,
-        projectId: createdProject.id,
-      }).catch((e) => {
-        console.error("Failed to generate project:", e);
+      after(() => {
+        generateProject({
+          value: input.value,
+          projectId: createdProject.id,
+        }).catch((e) => {
+          console.error("Failed to generate project:", e);
+        });
       });
 
       return createdProject;

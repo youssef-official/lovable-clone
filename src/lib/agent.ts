@@ -43,6 +43,17 @@ export async function generateProject(input: {
   value: string;
   projectId: string;
 }) {
+  try {
+    // Log start
+    await prisma.message.create({
+      data: {
+        projectId: input.projectId,
+        content: "Starting agent execution...",
+        role: "ASSISTANT",
+        type: "LOG",
+      },
+    });
+
   // Load conversation history
   const previousMessages = await prisma.message.findMany({
     where: {
@@ -337,7 +348,7 @@ export async function generateProject(input: {
     return `https://${host}`;
   })();
 
-  try {
+  // try { <--- Removed inner try
     if (isError) {
       return await prisma.message.create({
         data: {
@@ -365,7 +376,15 @@ export async function generateProject(input: {
       },
     });
   } catch (e) {
-    console.error("Database save failed:", e);
+    console.error("Agent failed:", e);
+    await prisma.message.create({
+      data: {
+        projectId: input.projectId,
+        content: `Agent critical failure: ${e}`,
+        role: "ASSISTANT",
+        type: "ERROR",
+      },
+    });
     throw e;
   }
 }
