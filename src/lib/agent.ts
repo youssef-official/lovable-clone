@@ -60,6 +60,12 @@ export async function generateProject(input: {
     take: 10, // Limit context window
   });
 
+  // Fetch the latest fragment to ensure we have the current file state
+  const latestFragment = await prisma.fragment.findFirst({
+    where: { message: { projectId: input.projectId } },
+    orderBy: { createdAt: "desc" },
+  });
+
   const history = previousMessages.reverse().map((msg) => ({
     role: msg.role.toLowerCase() as "user" | "assistant",
     content: msg.content,
@@ -98,13 +104,13 @@ export async function generateProject(input: {
 
         console.log("Starting dev server...");
         // Vite uses 5173 by default, but we configured it to 3000 in package.json
-        await sandbox.commands.run("npm run dev > /dev/null 2>&1 &");
+        await sandbox.commands.run("npm run dev > /home/user/npm_output.log 2>&1 &");
       }
     }
 
     // Ensure the server is running on port 3000
     console.log("Ensuring server is running...");
-    await sandbox.commands.run("if ! curl -s http://localhost:3000 > /dev/null; then npm run dev > /dev/null 2>&1 & fi");
+    await sandbox.commands.run("if ! curl -s http://localhost:3000 > /dev/null; then npm run dev > /home/user/npm_output.log 2>&1 & fi");
 
     return sandbox.sandboxId;
   })();
@@ -255,16 +261,10 @@ export async function generateProject(input: {
     agents: [codeAgent],
     maxIter: 15,
     router: async ({ network }) => {
-      // Pre-populate state if empty
+      // Pre-populate state if empty, using the latest fragment files if available, otherwise boilerplate
       if (!network.state.data.files) {
-        network.state.data.files = getBoilerplateFiles();
+        network.state.data.files = (latestFragment?.files as Record<string, string>) || getBoilerplateFiles();
       }
-      // If files are empty (maybe overwritten by defaultState logic?), ensure they exist.
-      // But actually, we want to ensure that IF we used the fallback, they are here.
-      // If we used the template, they might be different.
-      // However, saving the boilerplate files in the state is generally safe as the agent will overwrite them.
-      // The only risk is if the template has different content for the same files.
-      // But `vibe-nextjs-test-4` is likely consistent with our boilerplate or we want to overwrite it.
 
       const summary = network.state.data.summary;
       if (summary) {
@@ -287,16 +287,14 @@ export async function generateProject(input: {
   const hasFiles = Object.keys(result.state.data.files || {}).length > 0;
   let isError = !hasSummary || !hasFiles;
 
+  // Auto-correction retry (for missing summary/files)
   if (isError) {
     console.error(
       `Agent failed to produce a valid result. Has Summary: ${hasSummary}, Has Files: ${hasFiles}. Retrying with error feedback...`
     );
-
-    // Auto-correction retry
     const retryPrompt = `The previous attempt failed to generate a valid result (Summary: ${hasSummary}, Files: ${hasFiles}). Please ensure you generate files using createOrUpdateFiles and provide a <task_summary>. Try again.`;
     const retryResult = await network.run(retryPrompt);
 
-    // Update result with retry data
     if (retryResult.state.data.summary) {
         result.state.data.summary = retryResult.state.data.summary;
     }
@@ -304,10 +302,48 @@ export async function generateProject(input: {
         result.state.data.files = retryResult.state.data.files;
     }
 
-    // Re-evaluate error state
     const retryHasSummary = !!result.state.data.summary;
     const retryHasFiles = Object.keys(result.state.data.files || {}).length > 0;
     isError = !retryHasSummary || !retryHasFiles;
+  }
+
+  // Automatic Health Check & Self-Healing (Log Analysis)
+  if (!isError) {
+    try {
+      const sandbox = await getSandbox(sandboxId);
+      // Wait a moment for server to potentially settle
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const healthCheck = await sandbox.commands.run("curl -s http://localhost:3000 > /dev/null");
+      if (healthCheck.exitCode !== 0) {
+        console.warn("Health check failed. Attempting to read logs and auto-repair...");
+
+        const logContent = await sandbox.files.read("/home/user/npm_output.log").catch(() => "No logs found.");
+
+        // Feed the logs back to the agent
+        await prisma.message.create({
+            data: {
+                projectId: input.projectId,
+                content: "Detected application startup failure. Analyzing logs...",
+                role: "ASSISTANT",
+                type: "LOG",
+            }
+        });
+
+        const repairPrompt = `The application failed to start (health check failed). Here are the logs from npm run dev:\n\n${logContent}\n\nPlease analyze these logs and fix the application code (e.g., syntax errors, missing dependencies, build failures).`;
+        const repairResult = await network.run(repairPrompt);
+
+        // Update result if repair generated new output
+        if (repairResult.state.data.summary) {
+            result.state.data.summary += "\n\n(Auto-Repair applied)";
+            result.state.data.files = repairResult.state.data.files;
+        }
+      }
+    } catch (e) {
+      console.error("Self-healing check failed:", e);
+      // We don't fail the whole request if self-healing monitoring fails,
+      // but we should probably let the user know if we couldn't verify it.
+    }
   }
 
   const sandboxUrl = await (async () => {

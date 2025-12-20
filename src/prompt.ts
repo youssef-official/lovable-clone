@@ -56,6 +56,7 @@ After ALL tool calls are 100% complete and the task is fully finished, respond w
 
 <task_summary>
 A short, high-level summary of what was created or changed.
+Keep the text clean and professional. Avoid using excessive markdown symbols like '*' or '#' unless absolutely necessary for code.
 </task_summary>
 
 This marks the task as FINISHED. Do not include this early. Do not wrap it in backticks. Do not print it after each step. Print it once, only at the very end — never during or between tool usage.
