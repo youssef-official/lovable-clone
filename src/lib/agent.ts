@@ -73,7 +73,7 @@ export async function generateProject(input: {
 
   const sandboxId = await (async () => {
     let sandbox;
-    const templateId = process.env.E2B_TEMPLATE_ID || "vibe-nextjs-test-4";
+    const templateId = process.env.E2B_TEMPLATE_ID || "rki5dems9wqfm4r03t7g";
 
     try {
       sandbox = await Sandbox.create(templateId, {
