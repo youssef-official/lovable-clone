@@ -1,7 +1,23 @@
+import {
+  openai,
+  createAgent,
+  createTool,
+  createNetwork,
+  type Tool,
+  type AgentResult,
+  type TextMessage,
+} from "@inngest/agent-kit";
 import { Sandbox } from "@e2b/code-interpreter";
+import z from "zod";
+import { PROMPT } from "@/prompt";
 import { prisma } from "@/lib/db";
 import { getBoilerplateFiles, initializeSandbox } from "./sandbox";
 import { generateCodeFast } from "./fast-agent";
+
+interface AgentState {
+  summary: string;
+  files: { [path: string]: string };
+}
 
 async function getSandbox(sandboxId: string) {
   const sandbox = await Sandbox.connect(sandboxId);
@@ -113,12 +129,15 @@ export async function generateProject(input: {
         },
       });
 
-  } catch (error) {
+  } catch (error: any) {
       console.error("Fast generation failed:", error);
+      // Capture detailed error message for the user
+      const errorMessage = error.message || "Something went wrong during generation. Please try again.";
+
       return await prisma.message.create({
         data: {
           projectId: input.projectId,
-          content: "Something went wrong during generation. Please try again.",
+          content: `Error: ${errorMessage}`,
           role: "ASSISTANT",
           type: "ERROR",
         },

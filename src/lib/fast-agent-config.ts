@@ -1,15 +1,38 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createOpenAI } from '@ai-sdk/openai';
 
-// Create AI client with MiniMax API key
+// Create AI client with fallback to OpenRouter
 export function createAIClient() {
-  const apiKey = process.env.MINIMAX_API_KEY;
-  if (!apiKey) throw new Error('MINIMAX_API_KEY is missing');
+  const minimaxKey = process.env.MINIMAX_API_KEY;
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
 
-  // Use MiniMax with Anthropic SDK compatibility
-  return createAnthropic({
-    apiKey: apiKey,
-    baseURL: 'https://api.minimax.io/anthropic',
-  });
+  if (minimaxKey) {
+    // Use MiniMax direct
+    const anthropic = createAnthropic({
+      apiKey: minimaxKey,
+      baseURL: 'https://api.minimax.io/anthropic',
+    });
+    return (modelId: string) => anthropic(modelId);
+  }
+
+  if (openRouterKey) {
+    // Fallback to OpenRouter (using OpenAI compatible client)
+    const openai = createOpenAI({
+      apiKey: openRouterKey,
+      baseURL: 'https://openrouter.ai/api/v1',
+    });
+    // Map MiniMax-M2 to a comparable model on OpenRouter if user didn't specify one
+    // But typically we pass the model ID.
+    // For OpenRouter, we might want to default to something else if M2 isn't available there under the same name.
+    // However, the caller passes 'MiniMax-M2'. We should let the caller handle model ID or map it here.
+    return (modelId: string) => {
+        // Map model IDs if necessary
+        const oid = modelId === 'MiniMax-M2' ? 'minimax/minimax-01' : modelId;
+        return openai(oid);
+    };
+  }
+
+  throw new Error('Missing API Key: Please set MINIMAX_API_KEY or OPENROUTER_API_KEY');
 }
 
 export const SYSTEM_PROMPT = `You are an expert React developer with perfect memory of the conversation. You maintain context across messages and remember scraped websites, generated components, and applied code. Generate clean, modern React code for Vite applications.
