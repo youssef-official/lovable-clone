@@ -278,10 +278,15 @@ export async function initializeSandbox(
     }
   }
 
-  console.log("Installing dependencies...");
-  await sandbox.commands.run("npm install", {
-    timeoutMs: 300000, // 5 minutes
-  });
+  const hasNodeModules = await sandbox.files.exists("node_modules");
+  if (!hasNodeModules) {
+    console.log("Installing dependencies...");
+    await sandbox.commands.run("npm install", {
+      timeoutMs: 300000, // 5 minutes
+    });
+  } else {
+    console.log("Skipping dependency installation (node_modules exists).");
+  }
 
   console.log("Starting dev server...");
   await sandbox.commands.run(
