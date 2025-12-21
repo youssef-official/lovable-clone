@@ -12,6 +12,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.56",
     "@clerk/nextjs": "^6.24.0",
     "@clerk/themes": "^2.2.55",
     "@e2b/code-interpreter": "^1.5.1",
@@ -50,6 +51,7 @@
     "@trpc/client": "^11.4.2",
     "@trpc/server": "^11.4.2",
     "@trpc/tanstack-react-query": "^11.4.2",
+    "ai": "^5.0.116",
     "class-variance-authority": "^0.7.1",
     "client-only": "^0.0.1",
     "clsx": "^2.1.1",
