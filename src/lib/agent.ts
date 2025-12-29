@@ -129,7 +129,7 @@ export async function generateProject(input: {
           await prisma.message.create({
              data: {
                projectId: input.projectId,
-               content: \`Reading \${files.join(", ")}\`,
+               content: `Reading ${files.join(", ")}`,
                role: "ASSISTANT",
                type: "LOG",
              },
@@ -192,13 +192,13 @@ export async function generateProject(input: {
   // Add file context so the agent knows what exists
   const existingFiles = (latestFragment?.files as Record<string, string>) || getBoilerplateFiles();
   const fileList = Object.keys(existingFiles).join("\n");
-  const fileContext = \`Current File System State:\n\${fileList}\n\n\`;
+  const fileContext = `Current File System State:\n${fileList}\n\n`;
 
   if (history.length > 0) {
-    const historyText = history.map(h => \`\${h.role.toUpperCase()}: \${h.content}\`).join("\n");
-    fullPrompt = \`\${fileContext}Previous conversation history:\n\${historyText}\n\nCurrent Request:\n\${input.value}\`;
+    const historyText = history.map(h => `${h.role.toUpperCase()}: ${h.content}`).join("\n");
+    fullPrompt = `${fileContext}Previous conversation history:\n${historyText}\n\nCurrent Request:\n${input.value}`;
   } else {
-    fullPrompt = \`\${fileContext}Current Request:\n\${input.value}\`;
+    fullPrompt = `${fileContext}Current Request:\n${input.value}`;
   }
 
   const result = await network.run(fullPrompt);
@@ -210,9 +210,9 @@ export async function generateProject(input: {
   // Auto-correction retry (for missing summary/files)
   if (isError) {
     console.error(
-      \`Agent failed to produce a valid result. Has Summary: \${hasSummary}, Has Files: \${hasFiles}. Retrying with error feedback...\`
+      `Agent failed to produce a valid result. Has Summary: ${hasSummary}, Has Files: ${hasFiles}. Retrying with error feedback...`
     );
-    const retryPrompt = \`The previous attempt failed to generate a valid result (Summary: \${hasSummary}, Files: \${hasFiles}). Please ensure you generate files using createOrUpdateFiles and provide a <task_summary>. Try again.\`;
+    const retryPrompt = `The previous attempt failed to generate a valid result (Summary: ${hasSummary}, Files: ${hasFiles}). Please ensure you generate files using createOrUpdateFiles and provide a <task_summary>. Try again.`;
     const retryResult = await network.run(retryPrompt);
 
     if (retryResult.state.data.summary) {
@@ -247,7 +247,7 @@ export async function generateProject(input: {
         type: "RESULT",
         fragment: {
           create: {
-            sandboxUrl: null, // No more sandbox URL
+            sandboxUrl: "", // Empty string as fallback since null is not allowed
             title: "Fragment",
             files: result.state.data.files,
           },

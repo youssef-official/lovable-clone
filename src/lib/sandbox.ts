@@ -1,6 +1,6 @@
 export function getBoilerplateFiles() {
   return {
-    "project/pages/index.html": \`
+    "project/pages/index.html": `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,8 +18,8 @@ export function getBoilerplateFiles() {
     <script src="../assets/js/main.js"></script>
 </body>
 </html>
-\`.trim(),
-    "project/assets/css/style.css": \`
+`.trim(),
+    "project/assets/css/style.css": `
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     line-height: 1.6;
@@ -47,8 +47,8 @@ button {
 button:hover {
     background-color: #2980b9;
 }
-\`.trim(),
-    "project/assets/js/main.js": \`
+`.trim(),
+    "project/assets/js/main.js": `
 document.addEventListener('DOMContentLoaded', () => {
     const button = document.getElementById('click-me');
     if (button) {
@@ -57,11 +57,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-\`.trim(),
-    "README.md": \`
+`.trim(),
+    "README.md": `
 # Project Title
 
 This is a static HTML/CSS/JS project.
-\`.trim()
+`.trim()
   };
 }
