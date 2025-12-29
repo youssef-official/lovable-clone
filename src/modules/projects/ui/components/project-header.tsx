@@ -38,22 +38,8 @@ export const ProjectHeader = ({ projectId }: Props) => {
   const { data: project } = useSuspenseQuery(
     trpc.projects.getOne.queryOptions({ id: projectId }),
   );
-  const restoreSandbox = useMutation(
-    trpc.projects.restoreSandbox.mutationOptions(),
-  );
 
   const { setTheme, theme } = useTheme();
-
-  const onRestore = () => {
-    toast.promise(restoreSandbox.mutateAsync({ projectId }), {
-      loading: "Restoring sandbox...",
-      success: () => {
-        window.location.reload();
-        return "Sandbox restored!";
-      },
-      error: "Failed to restore sandbox",
-    });
-  };
 
   return (
     <header className="p-2 flex justify-between items-center border-b">
@@ -71,10 +57,6 @@ export const ProjectHeader = ({ projectId }: Props) => {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="start">
-          <DropdownMenuItem onClick={onRestore}>
-            <RotateCwIcon />
-            <span>Restart Sandbox</span>
-          </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href="/">
               <ChevronLeftIcon />

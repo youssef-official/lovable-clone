@@ -7,20 +7,14 @@ import {
   type AgentResult,
   type TextMessage,
 } from "@inngest/agent-kit";
-import { Sandbox } from "@e2b/code-interpreter";
 import z from "zod";
 import { PROMPT } from "@/prompt";
 import { prisma } from "@/lib/db";
-import { getBoilerplateFiles, initializeSandbox } from "./sandbox";
+import { getBoilerplateFiles } from "./sandbox";
 
 interface AgentState {
   summary: string;
   files: { [path: string]: string };
-}
-
-async function getSandbox(sandboxId: string) {
-  const sandbox = await Sandbox.connect(sandboxId);
-  return sandbox;
 }
 
 function lastAssistantTextMessageContent(result: AgentResult) {
@@ -71,33 +65,6 @@ export async function generateProject(input: {
     content: msg.content,
   }));
 
-  const sandboxId = await (async () => {
-    let sandbox;
-    const templateId = process.env.E2B_TEMPLATE_ID || "vibe-nextjs-test-4";
-
-    try {
-      sandbox = await Sandbox.create(templateId, {
-        timeoutMs: 30 * 60 * 1000, // 30 minutes
-      });
-    } catch (e) {
-      console.warn(
-        `Failed to load custom template "${templateId}". Falling back to base sandbox. Note: This may lack pre-installed dependencies. Error: ${e}`
-      );
-      sandbox = await Sandbox.create("base", {
-        timeoutMs: 30 * 60 * 1000, // 30 minutes
-      });
-    }
-
-    // Initialize sandbox (restore files if existing, or boilerplate if new)
-    await initializeSandbox(sandbox, latestFragment?.files as Record<string, string> | undefined);
-
-    // Ensure the server is running on port 3000
-    console.log("Ensuring server is running...");
-    await sandbox.commands.run("if ! curl -s http://localhost:3000 > /dev/null; then npm run dev > /home/user/npm_output.log 2>&1 & fi");
-
-    return sandbox.sandboxId;
-  })();
-
   const codeAgent = createAgent<AgentState>({
     name: "code-agent",
     description: "An expert coding agent",
@@ -109,46 +76,8 @@ export async function generateProject(input: {
     }),
     tools: [
       createTool({
-        name: "terminal",
-        description: "Use the terminal to run commands",
-        parameters: z.object({
-          command: z.string(),
-        }),
-        handler: async ({ command }) => {
-           // Log activity
-           await prisma.message.create({
-             data: {
-               projectId: input.projectId,
-               content: command,
-               role: "ASSISTANT",
-               type: "LOG", // Log type for commands
-             },
-           });
-
-          const buffers = { stdout: "", stderr: "" };
-
-          try {
-            const sandbox = await getSandbox(sandboxId);
-            const result = sandbox.commands.run(command, {
-              onStdout: (data: string) => {
-                buffers.stdout += data;
-              },
-              onStderr: (data: string) => {
-                buffers.stderr += data;
-              },
-            });
-            return (await result).stdout;
-          } catch (e) {
-            console.error(
-              `Command failed: ${e} \nstdout: ${buffers.stdout}\nstderror: ${buffers.stderr}`
-            );
-            return `Command failed: ${e} \nstdout: ${buffers.stdout}\nstderror: ${buffers.stderr}`;
-          }
-        },
-      }),
-      createTool({
         name: "createOrUpdateFiles",
-        description: "Create or update files in the sandbox",
+        description: "Create or update files in the project",
         parameters: z.object({
           files: z.array(
             z.object({
@@ -175,9 +104,7 @@ export async function generateProject(input: {
 
           try {
             const updatedFiles = network.state.data.files || {};
-            const sandbox = await getSandbox(sandboxId);
             for (const file of files) {
-              await sandbox.files.write(file.path, file.content);
               updatedFiles[file.path] = file.content;
             }
 
@@ -193,27 +120,29 @@ export async function generateProject(input: {
       }),
       createTool({
         name: "readFiles",
-        description: "Read files from the sandbox",
+        description: "Read files from the project",
         parameters: z.object({
           files: z.array(z.string()),
         }),
-        handler: async ({ files }) => {
+        handler: async ({ files }, { network }: Tool.Options<AgentState>) => {
           // Log activity
           await prisma.message.create({
              data: {
                projectId: input.projectId,
-               content: `Reading ${files.join(", ")}`,
+               content: \`Reading \${files.join(", ")}\`,
                role: "ASSISTANT",
                type: "LOG",
              },
            });
 
           try {
-            const sandbox = await getSandbox(sandboxId);
+            // Check files in the current session state first, then fallback to existing project files
+            const sessionFiles = network.state.data.files || {};
+            const existingFiles = (latestFragment?.files as Record<string, string>) || getBoilerplateFiles();
+
             const contents = [];
             for (const file of files) {
-              // Prevent hallucination to ensure file exists
-              const content = await sandbox.files.read(file);
+              const content = sessionFiles[file] || existingFiles[file] || "File not found";
               contents.push({ path: file, content });
             }
             return JSON.stringify(contents);
@@ -263,13 +192,13 @@ export async function generateProject(input: {
   // Add file context so the agent knows what exists
   const existingFiles = (latestFragment?.files as Record<string, string>) || getBoilerplateFiles();
   const fileList = Object.keys(existingFiles).join("\n");
-  const fileContext = `Current File System State:\n${fileList}\n\n`;
+  const fileContext = \`Current File System State:\n\${fileList}\n\n\`;
 
   if (history.length > 0) {
-    const historyText = history.map(h => `${h.role.toUpperCase()}: ${h.content}`).join("\n");
-    fullPrompt = `${fileContext}Previous conversation history:\n${historyText}\n\nCurrent Request:\n${input.value}`;
+    const historyText = history.map(h => \`\${h.role.toUpperCase()}: \${h.content}\`).join("\n");
+    fullPrompt = \`\${fileContext}Previous conversation history:\n\${historyText}\n\nCurrent Request:\n\${input.value}\`;
   } else {
-    fullPrompt = `${fileContext}Current Request:\n${input.value}`;
+    fullPrompt = \`\${fileContext}Current Request:\n\${input.value}\`;
   }
 
   const result = await network.run(fullPrompt);
@@ -281,9 +210,9 @@ export async function generateProject(input: {
   // Auto-correction retry (for missing summary/files)
   if (isError) {
     console.error(
-      `Agent failed to produce a valid result. Has Summary: ${hasSummary}, Has Files: ${hasFiles}. Retrying with error feedback...`
+      \`Agent failed to produce a valid result. Has Summary: \${hasSummary}, Has Files: \${hasFiles}. Retrying with error feedback...\`
     );
-    const retryPrompt = `The previous attempt failed to generate a valid result (Summary: ${hasSummary}, Files: ${hasFiles}). Please ensure you generate files using createOrUpdateFiles and provide a <task_summary>. Try again.`;
+    const retryPrompt = \`The previous attempt failed to generate a valid result (Summary: \${hasSummary}, Files: \${hasFiles}). Please ensure you generate files using createOrUpdateFiles and provide a <task_summary>. Try again.\`;
     const retryResult = await network.run(retryPrompt);
 
     if (retryResult.state.data.summary) {
@@ -297,51 +226,6 @@ export async function generateProject(input: {
     const retryHasFiles = Object.keys(result.state.data.files || {}).length > 0;
     isError = !retryHasSummary || !retryHasFiles;
   }
-
-  // Automatic Health Check & Self-Healing (Log Analysis)
-  if (!isError) {
-    try {
-      const sandbox = await getSandbox(sandboxId);
-      // Wait a moment for server to potentially settle
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      const healthCheck = await sandbox.commands.run("curl -s http://localhost:3000 > /dev/null");
-      if (healthCheck.exitCode !== 0) {
-        console.warn("Health check failed. Attempting to read logs and auto-repair...");
-
-        const logContent = await sandbox.files.read("/home/user/npm_output.log").catch(() => "No logs found.");
-
-        // Feed the logs back to the agent
-        await prisma.message.create({
-            data: {
-                projectId: input.projectId,
-                content: "Detected application startup failure. Analyzing logs...",
-                role: "ASSISTANT",
-                type: "LOG",
-            }
-        });
-
-        const repairPrompt = `The application failed to start (health check failed). Here are the logs from npm run dev (sandbox e2b iframe log):\n\n${logContent}\n\nPlease analyze these logs and fix the application code (e.g., syntax errors, missing dependencies, build failures).`;
-        const repairResult = await network.run(repairPrompt);
-
-        // Update result if repair generated new output
-        if (repairResult.state.data.summary) {
-            result.state.data.summary += "\n\n(Auto-Repair applied)";
-            result.state.data.files = repairResult.state.data.files;
-        }
-      }
-    } catch (e) {
-      console.error("Self-healing check failed:", e);
-      // We don't fail the whole request if self-healing monitoring fails,
-      // but we should probably let the user know if we couldn't verify it.
-    }
-  }
-
-  const sandboxUrl = await (async () => {
-    const sandbox = await getSandbox(sandboxId);
-    const host = sandbox.getHost(3000);
-    return `https://${host}`;
-  })();
 
   try {
     if (isError) {
@@ -363,7 +247,7 @@ export async function generateProject(input: {
         type: "RESULT",
         fragment: {
           create: {
-            sandboxUrl: sandboxUrl,
+            sandboxUrl: null, // No more sandbox URL
             title: "Fragment",
             files: result.state.data.files,
           },
