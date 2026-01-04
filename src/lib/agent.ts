@@ -1,4 +1,3 @@
-
 import {
   openai,
   createAgent,
@@ -8,20 +7,14 @@ import {
   type AgentResult,
   type TextMessage,
 } from "@inngest/agent-kit";
-import { Sandbox } from "@e2b/code-interpreter";
 import z from "zod";
 import { PROMPT } from "@/prompt";
 import { prisma } from "@/lib/db";
-import { getBoilerplateFiles, initializeSandbox } from "./sandbox";
+import { getBoilerplateFiles } from "./sandbox";
 
 interface AgentState {
   summary: string;
   files: { [path: string]: string };
-}
-
-async function getSandbox(sandboxId: string) {
-  const sandbox = await Sandbox.connect({ id: sandboxId });
-  return sandbox;
 }
 
 function lastAssistantTextMessageContent(result: AgentResult) {
@@ -49,7 +42,7 @@ export async function generateProject(input: {
     where: {
       projectId: input.projectId,
       type: {
-        in: ["RESULT", "ERROR"], // Only load final results or errors
+        in: ["RESULT", "ERROR"], // Only load final results or errors, not intermediate logs
       },
       role: {
         in: ["USER", "ASSISTANT"],
@@ -58,33 +51,19 @@ export async function generateProject(input: {
     orderBy: {
       createdAt: "desc",
     },
-    take: 10,
+    take: 10, // Limit context window
+  });
+
+  // Fetch the latest fragment to ensure we have the current file state
+  const latestFragment = await prisma.fragment.findFirst({
+    where: { message: { projectId: input.projectId } },
+    orderBy: { createdAt: "desc" },
   });
 
   const history = previousMessages.reverse().map((msg) => ({
     role: msg.role.toLowerCase() as "user" | "assistant",
     content: msg.content,
   }));
-
-  const latestFragment = await prisma.fragment.findFirst({
-    where: { message: { projectId: input.projectId } },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const sandboxId = await (async () => {
-    const templateId = process.env.E2B_TEMPLATE_ID || "vibe-nextjs-test-4";
-    const sandbox = await Sandbox.create({ 
-        template: templateId,
-        timeoutMs: 30 * 60 * 1000, // 30 minutes
-    });
-
-    await initializeSandbox(sandbox, latestFragment?.files as Record<string, string> | undefined);
-
-    console.log("Ensuring server is running...");
-    await sandbox.commands.run("if ! curl -s http://localhost:3000 > /dev/null; then npm run dev > /home/user/npm_output.log 2>&1 & fi");
-
-    return sandbox.id;
-  })();
 
   const codeAgent = createAgent<AgentState>({
     name: "code-agent",
@@ -97,23 +76,8 @@ export async function generateProject(input: {
     }),
     tools: [
       createTool({
-        name: "terminal",
-        description: "Use the terminal to run commands",
-        parameters: z.object({
-          command: z.string(),
-        }),
-        handler: async ({ command }) => {
-          const sandbox = await getSandbox(sandboxId);
-          const { stdout, stderr, exitCode } = await sandbox.commands.run(command);
-          if (exitCode !== 0) {
-            return `Command failed with exit code ${exitCode}.\nStderr: ${stderr}`;
-          }
-          return stdout;
-        },
-      }),
-      createTool({
         name: "createOrUpdateFiles",
-        description: "Create or update files in the sandbox. The agent should use this to write code.",
+        description: "Create or update files in the project",
         parameters: z.object({
           files: z.array(
             z.object({
@@ -126,47 +90,79 @@ export async function generateProject(input: {
           { files },
           { network }: Tool.Options<AgentState>,
         ) => {
+           // Log activity for each file
+           for (const file of files) {
+             await prisma.message.create({
+               data: {
+                 projectId: input.projectId,
+                 content: file.path,
+                 role: "ASSISTANT",
+                 type: "LOG", // Log type for file edits
+               },
+             });
+           }
+
           try {
             const updatedFiles = network.state.data.files || {};
-            const sandbox = await getSandbox(sandboxId);
             for (const file of files) {
-              await sandbox.files.write(file.path, file.content);
               updatedFiles[file.path] = file.content;
             }
-            network.state.data.files = updatedFiles;
-            return "Files updated successfully.";
+
+            if (typeof updatedFiles === "object") {
+              network.state.data.files = updatedFiles;
+            }
+
+            return updatedFiles;
           } catch (e) {
-            return "Error: " + (e as Error).message;
+            return "Error: " + e;
           }
         },
       }),
       createTool({
         name: "readFiles",
-        description: "Read files from the sandbox to understand the current state of the project.",
+        description: "Read files from the project",
         parameters: z.object({
           files: z.array(z.string()),
         }),
-        handler: async ({ files }) => {
+        handler: async ({ files }, { network }: Tool.Options<AgentState>) => {
+          // Log activity
+          await prisma.message.create({
+             data: {
+               projectId: input.projectId,
+               content: `Reading ${files.join(", ")}`,
+               role: "ASSISTANT",
+               type: "LOG",
+             },
+           });
+
           try {
-            const sandbox = await getSandbox(sandboxId);
+            // Check files in the current session state first, then fallback to existing project files
+            const sessionFiles = network.state.data.files || {};
+            const existingFiles = (latestFragment?.files as Record<string, string>) || getBoilerplateFiles();
+
             const contents = [];
             for (const file of files) {
-              const content = await sandbox.files.read(file);
+              const content = sessionFiles[file] || existingFiles[file] || "File not found";
               contents.push({ path: file, content });
             }
             return JSON.stringify(contents);
           } catch (e) {
-            return "Error: " + (e as Error).message;
+            return "Error: " + e;
           }
         },
       }),
     ],
     lifecycle: {
       onResponse: async ({ result, network }) => {
-        const lastAssistantMessageText = lastAssistantTextMessageContent(result);
-        if (lastAssistantMessageText?.includes("<task_summary>")) {
-          network.state.data.summary = lastAssistantMessageText;
+        const lastAssistantMessageText =
+          lastAssistantTextMessageContent(result);
+
+        if (lastAssistantMessageText && network) {
+          if (lastAssistantMessageText.includes("<task_summary>")) {
+            network.state.data.summary = lastAssistantMessageText;
+          }
         }
+
         return result;
       },
     },
@@ -175,49 +171,74 @@ export async function generateProject(input: {
   const network = createNetwork<AgentState>({
     name: "coding-agent-network",
     agents: [codeAgent],
-    maxIter: 8, // Reduced from 15 to 8
+    maxIter: 15,
     router: async ({ network }) => {
-      // Pre-populate state with the latest files if they exist
+      // Pre-populate state if empty, using the latest fragment files if available, otherwise boilerplate
       if (!network.state.data.files) {
         network.state.data.files = (latestFragment?.files as Record<string, string>) || getBoilerplateFiles();
       }
-      // If we have a summary, we're done.
-      if (network.state.data.summary) {
+
+      const summary = network.state.data.summary;
+      if (summary) {
         return;
       }
       return codeAgent;
     },
   });
-  
-  // Construct the prompt with history
+
+  // Manually prepend history to the input since createNetwork doesn't support it directly
   let fullPrompt = input.value;
+
+  // Add file context so the agent knows what exists
+  const existingFiles = (latestFragment?.files as Record<string, string>) || getBoilerplateFiles();
+  const fileList = Object.keys(existingFiles).join("\n");
+  const fileContext = `Current File System State:\n${fileList}\n\n`;
+
   if (history.length > 0) {
     const historyText = history.map(h => `${h.role.toUpperCase()}: ${h.content}`).join("\n");
-    fullPrompt = `Previous conversation history:\n${historyText}\n\nCurrent Request:\n${input.value}`;
+    fullPrompt = `${fileContext}Previous conversation history:\n${historyText}\n\nCurrent Request:\n${input.value}`;
+  } else {
+    fullPrompt = `${fileContext}Current Request:\n${input.value}`;
   }
 
   const result = await network.run(fullPrompt);
 
   const hasSummary = !!result.state.data.summary;
   const hasFiles = Object.keys(result.state.data.files || {}).length > 0;
-  const isError = !hasSummary || !hasFiles;
+  let isError = !hasSummary || !hasFiles;
 
-  const sandboxUrl = `https://${await (await getSandbox(sandboxId)).getHostname(3000)}`;
+  // Auto-correction retry (for missing summary/files)
+  if (isError) {
+    console.error(
+      `Agent failed to produce a valid result. Has Summary: ${hasSummary}, Has Files: ${hasFiles}. Retrying with error feedback...`
+    );
+    const retryPrompt = `The previous attempt failed to generate a valid result (Summary: ${hasSummary}, Files: ${hasFiles}). Please ensure you generate files using createOrUpdateFiles and provide a <task_summary>. Try again.`;
+    const retryResult = await network.run(retryPrompt);
+
+    if (retryResult.state.data.summary) {
+        result.state.data.summary = retryResult.state.data.summary;
+    }
+    if (retryResult.state.data.files && Object.keys(retryResult.state.data.files).length > 0) {
+        result.state.data.files = retryResult.state.data.files;
+    }
+
+    const retryHasSummary = !!result.state.data.summary;
+    const retryHasFiles = Object.keys(result.state.data.files || {}).length > 0;
+    isError = !retryHasSummary || !retryHasFiles;
+  }
 
   try {
     if (isError) {
-      // If the agent fails, save an error message
       return await prisma.message.create({
         data: {
           projectId: input.projectId,
-          content: "Sorry, I wasn't able to complete the task. Please try again with a more specific request.",
+          content: "Something went wrong. Please try again.",
           role: "ASSISTANT",
           type: "ERROR",
         },
       });
     }
 
-    // Save the successful result
     return await prisma.message.create({
       data: {
         projectId: input.projectId,
@@ -226,7 +247,7 @@ export async function generateProject(input: {
         type: "RESULT",
         fragment: {
           create: {
-            sandboxUrl: sandboxUrl,
+            sandboxUrl: "", // Empty string as fallback since null is not allowed
             title: "Fragment",
             files: result.state.data.files,
           },

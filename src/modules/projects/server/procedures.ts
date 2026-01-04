@@ -5,8 +5,6 @@ import { generateSlug } from "random-word-slugs";
 import { TRPCError } from "@trpc/server";
 import { consumeCredits } from "@/lib/usage";
 import { generateProject } from "@/lib/agent";
-import { Sandbox } from "@e2b/code-interpreter";
-import { initializeSandbox } from "@/lib/sandbox";
 import { deployToVercel, getDeploymentStatus } from "@/lib/vercel";
 import { createGitHubRepo, pushToGitHub } from "@/lib/github";
 import { after } from "next/server";
@@ -15,70 +13,8 @@ export const projectsRouter = createTRPCRouter({
   restoreSandbox: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const project = await prisma.project.findUnique({
-        where: {
-          id: input.projectId,
-          userId: ctx.auth.userId,
-        },
-      });
-
-      if (!project) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Project not found",
-        });
-      }
-
-      const latestFragment = await prisma.fragment.findFirst({
-        where: {
-          message: {
-            projectId: input.projectId,
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-
-      if (!latestFragment) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "No generated code found for this project",
-        });
-      }
-
-      const templateId = process.env.E2B_TEMPLATE_ID || "vibe-nextjs-test-4";
-      let sandbox;
-
-      try {
-        sandbox = await Sandbox.create(templateId, {
-          timeoutMs: 30 * 60 * 1000, // 30 minutes
-        });
-      } catch (e) {
-        console.warn(
-          `Failed to load custom template "${templateId}". Falling back to base sandbox. Error: ${e}`,
-        );
-        sandbox = await Sandbox.create("base", {
-          timeoutMs: 30 * 60 * 1000, // 30 minutes
-        });
-      }
-
-      // Restore sandbox state
-      await initializeSandbox(sandbox, latestFragment.files as Record<string, string>);
-
-      const host = sandbox.getHost(3000);
-      const sandboxUrl = `https://${host}`;
-
-      await prisma.fragment.update({
-        where: {
-          id: latestFragment.id,
-        },
-        data: {
-          sandboxUrl,
-        },
-      });
-
-      return sandboxUrl;
+        // No-op. Sandboxes are removed.
+        return null;
     }),
   getOne: protectedProcedure
     .input(z.object({ id: z.string().min(1, { message: "Id is required" }) }))
