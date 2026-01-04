@@ -1,5 +1,23 @@
 export const PROJECT_TEMPLATES = [
   {
+    emoji: "👤",
+    title: "Build a personal portfolio",
+    prompt:
+      "Create a professional personal portfolio website with a hero section featuring a name and title, an 'About Me' section with a brief bio, a 'Projects' section to showcase work with images and descriptions, and a 'Contact Me' form. The design should be modern, clean, and responsive, with a consistent color scheme and typography. Use smooth scrolling for navigation.",
+  },
+  {
+    emoji: "✍️",
+    title: "Build a blog",
+    prompt:
+      "Build a blog homepage with a featured post section, a grid of recent articles with titles, summaries, and author information. Include a category filter and a search bar. The design should be content-focused, with excellent readability, and a clean, minimalist layout. Use server-side rendering for the posts for better SEO.",
+  },
+  {
+    emoji: "🚀",
+    title: "Build a SaaS landing page",
+    prompt:
+      "Create a landing page for a SaaS product. Include a compelling hero section with a clear value proposition and a call-to-action button. Add a 'Features' section with icons and short descriptions, a 'Pricing' table with different tiers, and a 'Testimonials' section. The design should be professional, trustworthy, and conversion-optimized.",
+  },
+    {
     emoji: "🎬",
     title: "Build a Netflix clone",
     prompt:
@@ -39,12 +57,18 @@ export const PROJECT_TEMPLATES = [
     emoji: "🏡",
     title: "Build an Airbnb clone",
     prompt:
-      "Build an Airbnb-style listings grid with mock data, filter sidebar, and a modal with property details using local state. Use card spacing, soft shadows, and clean layout for a welcoming design.",
+      "Build an Airbnb-style listings grid with mock data, a filter sidebar, and a modal with property details using local state. Use card spacing, soft shadows, and a clean layout for a welcoming design.",
   },
   {
     emoji: "🎵",
     title: "Build a Spotify clone",
     prompt:
       "Build a Spotify-style music player with a sidebar for playlists, a main area for song details, and playback controls. Use local state for managing playback and song selection. Prioritize layout balance and intuitive control placement for a smooth user experience. Use dark mode.",
+  },
+  {
+    emoji: "📚",
+    title: "Build a documentation site",
+    prompt:
+      "Create a documentation website with a sidebar for navigation, a main content area for articles, and a search bar. Use Markdown for content and include code blocks with syntax highlighting. The design should be clean, easy to navigate, and highly readable.",
   },
 ] as const;
