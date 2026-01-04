@@ -11,7 +11,7 @@ import { Fragment } from "@/generated/prisma";
 import { ProjectHeader } from "../components/project-header";
 import { FragmentWeb } from "../components/fragment-web";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CodeIcon, CrownIcon, EyeIcon, MessageSquareIcon } from "lucide-react";
+import { CodeIcon, CrownIcon, EyeIcon, MessageSquareIcon, RotateCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { FileExplorer } from "@/components/file-explorer";
@@ -19,6 +19,9 @@ import { UserControl } from "@/components/user-control";
 import { useAuth } from "@clerk/nextjs";
 import { PublishDialog } from "../components/publish-dialog";
 import { DownloadZipButton } from "../components/download-zip";
+import { useTRPC } from "@/trpc/client";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface Props {
   projectId: string;
@@ -27,9 +30,10 @@ interface Props {
 export const ProjectView = ({ projectId }: Props) => {
   const { has } = useAuth();
   const hasProAccess = has?.({ plan: "pro" });
+  const trpc = useTRPC();
 
   const [activeFragment, setActiveFragment] = useState<Fragment | null>(null);
-  const [mobileTab, setMobileTab] = useState<"chat" | "preview" | "code">("chat");
+  const [mobileTab, setMobileTab] = useState<"chat" | "preview">("chat");
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -40,6 +44,18 @@ export const ProjectView = ({ projectId }: Props) => {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  const restoreSandbox = useMutation(
+    trpc.projects.restoreSandbox.mutationOptions({
+      onSuccess: () => {
+        toast.success("Sandbox restored successfully");
+        window.location.reload();
+      },
+      onError: () => {
+        toast.error("Failed to restore sandbox");
+      },
+    }),
+  );
 
   const DesktopView = () => (
     <ResizablePanelGroup direction="horizontal">
@@ -75,6 +91,15 @@ export const ProjectView = ({ projectId }: Props) => {
               </TabsTrigger>
             </TabsList>
             <div className="ml-auto flex items-center gap-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => restoreSandbox.mutate({ projectId })}
+                disabled={restoreSandbox.isPending}
+              >
+                <RotateCwIcon className={`w-4 h-4 mr-2 ${restoreSandbox.isPending ? "animate-spin" : ""}`} />
+                Restart Sandbox
+              </Button>
               {!hasProAccess && (
                 <Button asChild size="sm" variant={"tertiary"}>
                   <Link href="/pricing">
@@ -106,12 +131,22 @@ export const ProjectView = ({ projectId }: Props) => {
   );
 
   const MobileView = () => (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden bg-background">
       <div className="flex-1 min-h-0 relative">
         {mobileTab === "chat" && (
           <div className="h-full flex flex-col">
             <Suspense fallback={<p>Loading project...</p>}>
-              <ProjectHeader projectId={projectId} />
+              <div className="flex items-center justify-between pr-2">
+                <ProjectHeader projectId={projectId} />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => restoreSandbox.mutate({ projectId })}
+                  disabled={restoreSandbox.isPending}
+                >
+                  <RotateCwIcon className={`w-5 h-5 ${restoreSandbox.isPending ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
             </Suspense>
             <Suspense fallback={<p>Loading...</p>}>
               <MessagesContainer
@@ -123,57 +158,45 @@ export const ProjectView = ({ projectId }: Props) => {
           </div>
         )}
         {mobileTab === "preview" && (
-          <div className="h-full">
+          <div className="h-full flex flex-col">
+             <div className="p-2 border-b flex items-center justify-between">
+                <span className="font-medium text-sm px-2">Preview</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => restoreSandbox.mutate({ projectId })}
+                  disabled={restoreSandbox.isPending}
+                >
+                  <RotateCwIcon className={`w-5 h-5 ${restoreSandbox.isPending ? "animate-spin" : ""}`} />
+                </Button>
+             </div>
             {activeFragment ? (
               <FragmentWeb data={activeFragment} />
             ) : (
-              <div className="flex items-center justify-center h-full">
+              <div className="flex items-center justify-center flex-1">
                 <p className="text-muted-foreground">No preview available yet</p>
-              </div>
-            )}
-          </div>
-        )}
-        {mobileTab === "code" && (
-          <div className="h-full overflow-auto">
-            {activeFragment?.files ? (
-              <FileExplorer
-                files={activeFragment.files as { [path: string]: string }}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-muted-foreground">No code available yet</p>
               </div>
             )}
           </div>
         )}
       </div>
       
-      {/* Mobile Navigation Bar */}
-      <div className="border-t bg-background p-2 flex items-center justify-around gap-x-2">
-        <Button 
-          variant={mobileTab === "chat" ? "default" : "ghost"} 
-          className="flex-1 flex flex-col items-center py-6 h-auto"
-          onClick={() => setMobileTab("chat")}
-        >
-          <MessageSquareIcon className="w-5 h-5 mb-1" />
-          <span className="text-xs">Chat</span>
-        </Button>
-        <Button 
-          variant={mobileTab === "preview" ? "default" : "ghost"} 
-          className="flex-1 flex flex-col items-center py-6 h-auto"
-          onClick={() => setMobileTab("preview")}
-        >
-          <EyeIcon className="w-5 h-5 mb-1" />
-          <span className="text-xs">Preview</span>
-        </Button>
-        <Button 
-          variant={mobileTab === "code" ? "default" : "ghost"} 
-          className="flex-1 flex flex-col items-center py-6 h-auto"
-          onClick={() => setMobileTab("code")}
-        >
-          <CodeIcon className="w-5 h-5 mb-1" />
-          <span className="text-xs">Code</span>
-        </Button>
+      {/* Mobile Navigation Bar - Styled like the requested image */}
+      <div className="p-4 pb-8 bg-background border-t">
+        <div className="flex bg-muted/50 rounded-full p-1 max-w-md mx-auto">
+          <button 
+            className={`flex-1 py-2 px-4 rounded-full text-sm font-medium transition-all ${mobileTab === "chat" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setMobileTab("chat")}
+          >
+            Chat
+          </button>
+          <button 
+            className={`flex-1 py-2 px-4 rounded-full text-sm font-medium transition-all ${mobileTab === "preview" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setMobileTab("preview")}
+          >
+            Preview
+          </button>
+        </div>
       </div>
     </div>
   );
