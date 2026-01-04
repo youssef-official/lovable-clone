@@ -20,7 +20,7 @@ interface AgentState {
 }
 
 async function getSandbox(sandboxId: string) {
-  const sandbox = await Sandbox.connect({ id: sandboxId });
+  const sandbox = await Sandbox.connect(sandboxId);
   return sandbox;
 }
 
