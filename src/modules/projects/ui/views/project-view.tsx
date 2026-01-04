@@ -8,7 +8,7 @@ import {
 import { MessagesContainer } from "../components/messages-container";
 import { Suspense, useState, useEffect } from "react";
 import { Fragment } from "@/generated/prisma";
-import { ProjectHeader } from "../project-header";
+import { ProjectHeader } from "../components/project-header";
 import { FragmentWeb } from "../components/fragment-web";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CodeIcon, CrownIcon, EyeIcon, MessageSquareIcon } from "lucide-react";

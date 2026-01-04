@@ -57,4 +57,3 @@ A short, high-level summary of what was created or changed, mentioning the use o
 
 This marks the task as FINISHED. Do not include this early. Do not wrap it in backticks. Do not print it after each step. Print it once, only at the very end — never during or between tool usage.
 `;
-`
