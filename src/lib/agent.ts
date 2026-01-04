@@ -20,7 +20,7 @@ interface AgentState {
 }
 
 async function getSandbox(sandboxId: string) {
-  const sandbox = await Sandbox.connect(sandboxId);
+  const sandbox = await Sandbox.connect({ id: sandboxId });
   return sandbox;
 }
 
@@ -73,7 +73,8 @@ export async function generateProject(input: {
 
   const sandboxId = await (async () => {
     const templateId = process.env.E2B_TEMPLATE_ID || "vibe-nextjs-test-4";
-    const sandbox = await Sandbox.create(templateId, {
+    const sandbox = await Sandbox.create({ 
+        template: templateId,
         timeoutMs: 30 * 60 * 1000, // 30 minutes
     });
 
