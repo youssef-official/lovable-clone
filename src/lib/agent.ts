@@ -74,7 +74,7 @@ export async function generateProject(input: {
   const sandboxId = await (async () => {
     const templateId = process.env.E2B_TEMPLATE_ID || "vibe-nextjs-test-4";
     const sandbox = await Sandbox.create(templateId, {
-        timeout: 30 * 60 * 1000, // 30 minutes
+        timeoutMs: 30 * 60 * 1000, // 30 minutes
     });
 
     await initializeSandbox(sandbox, latestFragment?.files as Record<string, string> | undefined);
