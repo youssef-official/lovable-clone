@@ -20,7 +20,7 @@ interface AgentState {
 }
 
 async function getSandbox(sandboxId: string) {
-  const sandbox = await Sandbox.connect(sandboxId);
+  const sandbox = await Sandbox.connect({ id: sandboxId });
   return sandbox;
 }
 
@@ -80,7 +80,7 @@ export async function generateProject(input: {
     await initializeSandbox(sandbox, latestFragment?.files as Record<string, string> | undefined);
 
     console.log("Ensuring server is running...");
-    await sandbox.run("if ! curl -s http://localhost:3000 > /dev/null; then npm run dev > /home/user/npm_output.log 2>&1 & fi");
+    await sandbox.commands.run("if ! curl -s http://localhost:3000 > /dev/null; then npm run dev > /home/user/npm_output.log 2>&1 & fi");
 
     return sandbox.id;
   })();
@@ -103,7 +103,7 @@ export async function generateProject(input: {
         }),
         handler: async ({ command }) => {
           const sandbox = await getSandbox(sandboxId);
-          const { stdout, stderr, exitCode } = await sandbox.run(command);
+          const { stdout, stderr, exitCode } = await sandbox.commands.run(command);
           if (exitCode !== 0) {
             return `Command failed with exit code ${exitCode}.\nStderr: ${stderr}`;
           }
